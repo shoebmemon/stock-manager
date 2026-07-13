@@ -1,9 +1,9 @@
-const CACHE_NAME = "shop-stock-order-app-v135";
+const CACHE_NAME = "shop-stock-order-app-v136";
 const APP_ASSETS = [
   "./",
   "./index.html",
-  "./styles.css?v=33",
-  "./app.js?v=72",
+  "./styles.css?v=34",
+  "./app.js?v=73",
   "./manifest.webmanifest",
   "./icon.svg",
   "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"
