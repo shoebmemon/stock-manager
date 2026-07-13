@@ -117,7 +117,12 @@ if (typeof window !== "undefined") {
   window.addEventListener("online", () => { flushSyncQueue().then(() => pullFromSupabase().then((pulled) => { if (pulled) render(); })); });
 }
 
-let currentStatusFilter = "active"; 
+let currentStatusFilter = "active";
+const STATUS_FILTER_KEY = "shopStockOrderApp_lastStatusFilter";
+try {
+  const savedStatusFilter = localStorage.getItem(STATUS_FILTER_KEY);
+  if (savedStatusFilter === "active" || savedStatusFilter === "completed") currentStatusFilter = savedStatusFilter;
+} catch (err) { console.warn("Could not restore status filter:", err); }
 let focusedSupplierId = null;
 let focusedBatchId = null;
 let longPressTimer = null;
@@ -326,6 +331,7 @@ document.querySelectorAll("[data-status-filter]").forEach((pill) => {
     if(el.pillActive) el.pillActive.classList.toggle("active", pill.dataset.statusFilter === "active");
     if(el.pillCompleted) el.pillCompleted.classList.toggle("active", pill.dataset.statusFilter === "completed");
     currentStatusFilter = pill.dataset.statusFilter;
+    try { localStorage.setItem(STATUS_FILTER_KEY, currentStatusFilter); } catch (err) { console.warn("Could not persist status filter:", err); }
     resetMasterSelection(); resetDeepSelection();
     if (el.deepView) el.deepView.style.display = "none";
     if (el.masterView) el.masterView.style.display = "block";
