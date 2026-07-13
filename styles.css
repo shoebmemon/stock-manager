@@ -420,7 +420,7 @@ tr:last-child td {
 .order-panel {
   max-width: 760px;
   margin: 0 auto;
-  background: var(--soft);
+  background: #e7e9eb;
 }
 
 .data-panel {
@@ -432,7 +432,7 @@ tr:last-child td {
   max-width: 900px;
   margin-left: auto;
   margin-right: auto;
-  background: var(--soft);
+  background: #e7e9eb;
 }
 
 .data-panel {
