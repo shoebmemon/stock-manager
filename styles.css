@@ -379,9 +379,9 @@ tr:last-child td {
 
 .supplier-list,
 .order-list {
-  margin-top: 14px;
+  margin-top: 8px;
   display: grid;
-  gap: 12px;
+  gap: 8px;
 }
 
 .supplier-card,
