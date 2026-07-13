@@ -15,6 +15,9 @@
   --ok-bg: #e8f6ec;
   --ok-text: #24713a;
   --header-height-mobile: 68px;
+  --card-radius: 16px;
+  --card-shadow: 0 1px 3px rgba(13, 34, 39, 0.06), 0 10px 26px rgba(13, 34, 39, 0.12);
+  --card-shadow-sm: 0 1px 2px rgba(13, 34, 39, 0.05), 0 4px 12px rgba(13, 34, 39, 0.08);
 }
 
 * {
@@ -148,7 +151,7 @@ select:focus-visible,
 
 .supplier-card-row.row-selected {
   background: var(--soft);
-  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary), var(--card-shadow-sm);
 }
 
 .bulk-delete-bar {
@@ -242,10 +245,10 @@ h2 {
 
 .panel {
   background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  border: 0;
+  border-radius: var(--card-radius);
   padding: 18px;
-  box-shadow: 0 8px 20px rgba(13, 34, 39, 0.05);
+  box-shadow: var(--card-shadow);
 }
 
 .section-heading {
@@ -312,8 +315,9 @@ select {
 
 .table-wrap {
   overflow-x: auto;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  border: 0;
+  border-radius: var(--card-radius);
+  box-shadow: var(--card-shadow-sm);
 }
 
 table {
@@ -376,17 +380,18 @@ tr:last-child td {
 .order-list {
   margin-top: 14px;
   display: grid;
-  gap: 8px;
+  gap: 12px;
 }
 
 .supplier-card,
 .order-card {
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 10px;
+  border: 0;
+  border-radius: 14px;
+  padding: 12px;
   display: grid;
   gap: 7px;
-  background: #fbfcfc;
+  background: #ffffff;
+  box-shadow: var(--card-shadow-sm);
 }
 
 .supplier-list {
@@ -445,10 +450,11 @@ tr:last-child td {
 
 .pdf-preview {
   margin-top: 16px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  border: 0;
+  border-radius: var(--card-radius);
   overflow: hidden;
   background: #fff;
+  box-shadow: var(--card-shadow-sm);
 }
 
 .pdf-preview-head {
@@ -477,7 +483,7 @@ tr:last-child td {
   padding: 14px;
   color: var(--muted);
   background: var(--soft);
-  border-radius: 8px;
+  border-radius: 12px;
   font-size: 0.92rem;
 }
 
@@ -554,7 +560,7 @@ tr:last-child td {
   }
 
   .panel {
-    border-radius: 8px;
+    border-radius: 14px;
     padding: 14px;
   }
 
@@ -601,6 +607,8 @@ tr:last-child td {
 
   .table-wrap {
     border: 0;
+    border-radius: 0;
+    box-shadow: none;
     overflow: visible;
   }
 
@@ -623,11 +631,12 @@ tr:last-child td {
   }
 
   tr {
-    margin-bottom: 10px;
-    border: 1px solid var(--line);
-    border-radius: 8px;
+    margin-bottom: 12px;
+    border: 0;
+    border-radius: 14px;
     background: #fff;
     padding: 10px;
+    box-shadow: var(--card-shadow-sm);
   }
 
   td {
