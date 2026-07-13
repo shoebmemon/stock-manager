@@ -591,7 +591,6 @@ function renderSupplierList() {
             <strong style="font-size: 1rem; display: block; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(supplier.name)}</strong>
             <div style="font-size: 0.82rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${supplier.phone ? escapeHtml(supplier.phone) : (supplier.email ? escapeHtml(supplier.email) : "No contact info")}</div>
           </div>
-          <div style="flex-shrink: 0; display: flex; align-items: center; gap: 6px;"><span style="color: var(--primary); font-size: 1.2rem; line-height: 1; padding-left: 4px;">›</span></div>
         </div>
       `).join("");
   setupSupplierLongPressTriggers();

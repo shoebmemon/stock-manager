@@ -198,19 +198,21 @@ h2 {
 }
 
 .tab-button {
-  border: 1px solid var(--line);
-  background: #fff;
-  color: #39484d;
+  border: 0;
+  background: transparent;
+  color: #6b7a80;
   flex-direction: column;
   gap: 3px;
   padding: 9px 4px 8px;
   min-height: 56px;
   min-width: 60px;
   font-size: 0.64rem;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.05;
   letter-spacing: 0.01em;
   white-space: normal;
+  border-radius: 12px;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .tab-icon {
@@ -220,9 +222,8 @@ h2 {
 }
 
 .tab-button.active {
-  background: var(--primary);
-  border-color: var(--primary);
-  color: #fff;
+  background: var(--soft);
+  color: var(--primary-strong);
 }
 
 .app-shell {
@@ -533,9 +534,10 @@ tr:last-child td {
     right: 0;
     bottom: 0;
     padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
-    border-top: 1px solid var(--line);
-    background: rgba(245, 247, 248, 0.96);
-    box-shadow: 0 -8px 20px rgba(13, 34, 39, 0.08);
+    background: rgba(250, 251, 251, 0.92);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 -1px 12px rgba(13, 34, 39, 0.06);
     transition: transform 0.12s ease-out;
   }
 
