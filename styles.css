@@ -355,7 +355,8 @@ tr:last-child td {
 }
 
 .item-name {
-  font-weight: 800;
+  font-weight: 500;
+  font-size: 1.0625rem;
 }
 
 .subtle {

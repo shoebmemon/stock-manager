@@ -588,7 +588,7 @@ function renderSupplierList() {
   el.supplierList.innerHTML = visibleSuppliers.map((supplier) => `
         <div class="supplier-card-row" data-supplier-id="${supplier.id}" style="display: flex; align-items: center; gap: 10px; border: 0; border-radius: 14px; padding: 8px 12px; background: #fff; margin-bottom: 6px; cursor: pointer; user-select: none; -webkit-user-select: none; overflow: hidden; box-shadow: var(--card-shadow-sm);">
           <div style="flex: 1 1 0; min-width: 0; overflow: hidden;">
-            <strong style="font-size: 1rem; font-weight: 600; display: block; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(supplier.name)}</strong>
+            <strong style="font-size: 1.0625rem; font-weight: 500; display: block; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(supplier.name)}</strong>
             <div style="font-size: 0.82rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${supplier.phone ? escapeHtml(supplier.phone) : (supplier.email ? escapeHtml(supplier.email) : "No contact info")}</div>
           </div>
         </div>
