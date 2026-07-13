@@ -8,7 +8,9 @@
   --primary: #126a72;
   --primary-strong: #0c4f55;
   --accent: #c85d2f;
+  --accent-strong: #a3491f;
   --soft: #eef6f4;
+  --backdrop: #e6ebec;
   --danger: #b33a3a;
   --warn-bg: #fff3dc;
   --warn-text: #8a5200;
@@ -224,6 +226,7 @@ h2 {
 .tab-button.active {
   background: var(--soft);
   color: var(--primary-strong);
+  box-shadow: inset 0 3px 0 var(--primary);
 }
 
 .app-shell {
@@ -420,7 +423,7 @@ tr:last-child td {
 .order-panel {
   max-width: 760px;
   margin: 0 auto;
-  background: var(--soft);
+  background: var(--backdrop);
 }
 
 .data-panel {
@@ -432,7 +435,7 @@ tr:last-child td {
   max-width: 900px;
   margin-left: auto;
   margin-right: auto;
-  background: var(--soft);
+  background: var(--backdrop);
 }
 
 .data-panel {
