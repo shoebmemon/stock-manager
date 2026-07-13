@@ -538,7 +538,7 @@ function renderSupplierStockDetail() {
   el.supplierStockDetailList.innerHTML = items.map(item => `
     <div class="supplier-stock-item" data-item-id="${item.id}" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 0; border-radius: 14px; background: #fff; margin-bottom: 10px; cursor: pointer; user-select: none; -webkit-user-select: none; overflow: hidden; box-shadow: var(--card-shadow-sm);">
       <div style="flex: 1 1 0; min-width: 0;">
-        <strong style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.95rem;">${escapeHtml(item.name)}</strong>
+        <strong style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 1.05rem; font-weight: 600;">${escapeHtml(item.name)}</strong>
         <span style="font-size: 0.8rem; color: var(--muted);">${escapeHtml(item.unit || "pcs")}</span>
       </div>
       <span style="flex-shrink: 0; color: var(--primary); font-size: 1rem;">➕</span>
@@ -588,7 +588,7 @@ function renderSupplierList() {
   el.supplierList.innerHTML = visibleSuppliers.map((supplier) => `
         <div class="supplier-card-row" data-supplier-id="${supplier.id}" style="display: flex; align-items: center; gap: 10px; border: 0; border-radius: 14px; padding: 8px 12px; background: #fff; margin-bottom: 6px; cursor: pointer; user-select: none; -webkit-user-select: none; overflow: hidden; box-shadow: var(--card-shadow-sm);">
           <div style="flex: 1 1 0; min-width: 0; overflow: hidden;">
-            <strong style="font-size: 1.0625rem; font-weight: 500; display: block; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(supplier.name)}</strong>
+            <strong style="font-size: 1.05rem; font-weight: 600; display: block; margin-bottom: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(supplier.name)}</strong>
             <div style="font-size: 0.82rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${supplier.phone ? escapeHtml(supplier.phone) : (supplier.email ? escapeHtml(supplier.email) : "No contact info")}</div>
           </div>
         </div>
@@ -1257,7 +1257,7 @@ function openSupplierDeepView(supplierId, batchId) {
       const item = state.stocks.find(s => s.id === line.itemId);
       return `<div class="order-card" data-line-id="${line.id}" style="background: #fff; border: 0; padding: 10px; margin-bottom: 10px; border-radius: 14px; display: flex; justify-content: space-between; align-items: center; min-width: 0; gap: 10px; box-shadow: var(--card-shadow-sm);">
           <div style="min-width: 0; flex: 1 1 auto; margin-left: 2px; overflow: hidden;">
-            <strong style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${escapeHtml(item?.name || "Deleted item")}</strong>
+            <strong style="display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 1.05rem; font-weight: 600;">${escapeHtml(item?.name || "Deleted item")}</strong>
             <div class="order-meta" style="font-size: 0.85rem; color: var(--muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Qty: ${formatNumber(line.quantity)} ${escapeHtml(item?.unit || "pcs")}</div>
           </div>
           ${currentStatusFilter === 'active' ? `<button class="icon-btn" type="button" data-action="edit-deep-line" data-line-id="${line.id}" title="Edit quantity" style="min-width: 32px; min-height: 32px; height: 32px; width: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; border-radius: 6px; border: 1px solid var(--line); background:#fff; font-size: 15px;">✏️</button>` : ''}
