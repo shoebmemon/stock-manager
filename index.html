@@ -189,7 +189,7 @@
     background:var(--paper-raised);
     border:1px solid var(--line);
     border-radius:var(--radius);
-    padding:2px 12px;
+    padding:6px 16px;
     margin-bottom:14px;
   }
 
@@ -307,15 +307,39 @@
     display:flex;
     align-items:center;
     gap:8px;
-    padding:7px 2px;
+    padding:8px 4px;
     border-bottom:1px dashed var(--line);
     transition:background .1s ease;
     content-visibility:auto;
-    contain-intrinsic-size:0 38px;
+    contain-intrinsic-size:0 44px;
+    position:relative;
+    z-index:0;
   }
   .ledger-row:last-child{ border-bottom:none; }
   .ledger-row.selecting{ cursor:pointer; }
-  .ledger-row.selected{ background:#FBF1DF; }
+  .ledger-row.selected{
+    content-visibility:visible;
+  }
+  .ledger-row.selected::before{
+    content:'';
+    position:absolute;
+    left:-16px;
+    right:-16px;
+    top:0;
+    bottom:0;
+    background:#FBF1DF;
+    z-index:-1;
+  }
+  .ledger-row.selected:first-child::before{
+    top:-6px;
+    border-top-left-radius:var(--radius);
+    border-top-right-radius:var(--radius);
+  }
+  .ledger-row.selected:last-child::before{
+    bottom:-6px;
+    border-bottom-left-radius:var(--radius);
+    border-bottom-right-radius:var(--radius);
+  }
   .ledger-row .idx{
     font-family:'IBM Plex Mono', monospace;
     font-size:10px;
@@ -324,7 +348,7 @@
     flex-shrink:0;
   }
   .ledger-row .info{ flex:1; min-width:0; }
-  .ledger-row .name{ font-weight:600; font-size:14px; color:var(--ink); line-height:1.3; }
+  .ledger-row .name{ font-weight:600; font-size:13.5px; color:var(--ink); line-height:1.3; }
   .ledger-row .meta{
     font-family:'IBM Plex Mono', monospace;
     font-size:10.5px;
@@ -336,12 +360,9 @@
   }
   .ledger-row .unit-pill{
     font-family:'IBM Plex Mono', monospace;
-    font-size:10px;
-    background:var(--paper);
-    border:1px solid var(--line);
-    border-radius:5px;
-    padding:2px 6px;
-    color:var(--ink-soft);
+    font-size:11px;
+    color:var(--slate);
+    letter-spacing:0.3px;
     flex-shrink:0;
   }
   .row-check{
@@ -421,6 +442,7 @@
   .empty p{ font-size:13.5px; line-height:1.5; margin:0; }
 
   .review-header{ display:flex; align-items:center; gap:10px; margin-bottom:16px; }
+  .review-header .who{ flex:1; min-width:0; }
   .back-btn{
     background:var(--paper-raised);
     border:1px solid var(--line);
@@ -433,12 +455,12 @@
   }
   .review-header .who h2{ margin:0; font-family:'Space Grotesk', sans-serif; font-size:17px; }
   .review-header .who .ph{ font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--slate); }
-  .qty-row{ display:flex; align-items:center; gap:12px; padding:12px 4px; border-bottom:1px dashed var(--line); }
+  .qty-row{ display:flex; align-items:center; gap:10px; padding:8px 4px; border-bottom:1px dashed var(--line); }
   .qty-row:last-child{ border-bottom:none; }
   .qty-row .qinfo{ flex:1; min-width:0; }
-  .qty-row .qname{ font-weight:600; font-size:14px; }
-  .qty-row .qunit{ font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--slate); }
-  .qty-row input.qty{ width:64px; text-align:center; padding:9px 4px; font-family:'IBM Plex Mono', monospace; font-weight:600; }
+  .qty-row .qname{ font-weight:600; font-size:13.5px; line-height:1.3; }
+  .qty-row .qunit{ font-family:'IBM Plex Mono', monospace; font-size:10.5px; color:var(--slate); margin-top:1px; }
+  .qty-row input.qty{ width:54px; text-align:center; padding:6px 3px; font-family:'IBM Plex Mono', monospace; font-weight:600; }
   .send-btn{
     width:100%;
     margin-top:16px;
@@ -735,6 +757,7 @@ let orderHistory = [];
 let currentTab = 'order';
 let reviewingSupplierKey = null;
 let editingStockId = null;
+let editingSupplierKey = null;
 let stocksSearch = '';
 let stocksSort = 'az';
 let suppliersSort = 'az';
@@ -778,12 +801,17 @@ const SWIPE_MIN_DISTANCE = 55;
 const SWIPE_MAX_VERTICAL = 70;
 const SWIPE_MAX_TIME = 600;
 
-function isInNestedView(){
-  return !!(
-    reviewingSupplierKey || viewingOrderId || supplierStocksViewKey ||
-    editingStockId || addingNewStock ||
-    stockSelectionMode || supplierSelectionMode || selectionMode
-  );
+function isSelecting(){
+  return !!(stockSelectionMode || supplierSelectionMode || selectionMode);
+}
+
+function getNestedViewCloser(){
+  if(supplierStocksViewKey) return closeSupplierStocksView;
+  if(viewingOrderId) return closeOrderDetail;
+  if(reviewingSupplierKey) return closeReview;
+  if(editingSupplierKey) return closeEditSupplier;
+  if(editingStockId || addingNewStock) return closeStockForm;
+  return null;
 }
 
 function isOverlayOpen(){
@@ -801,7 +829,7 @@ function handleSwipeStart(e){
 }
 
 function handleSwipeEnd(e){
-  if(isInNestedView() || isOverlayOpen()) return;
+  if(isSelecting() || isOverlayOpen()) return;
 
   const t = e.changedTouches[0];
   const dx = t.clientX - swipeStartX;
@@ -811,6 +839,12 @@ function handleSwipeEnd(e){
   if(dt > SWIPE_MAX_TIME) return;
   if(Math.abs(dx) < SWIPE_MIN_DISTANCE) return;
   if(Math.abs(dy) > SWIPE_MAX_VERTICAL) return;
+
+  const closer = getNestedViewCloser();
+  if(closer){
+    if(dx > 0) closer();
+    return;
+  }
 
   const idx = TABS.indexOf(currentTab);
   if(dx < 0 && idx < TABS.length - 1){
@@ -1031,7 +1065,9 @@ function switchTab(tab){
   currentTab = tab;
   reviewingSupplierKey = null;
   editingStockId = null;
+  editingSupplierKey = null;
   viewingOrderId = null;
+  supplierStocksViewKey = null;
   selectionMode = false;
   selectionTab = null;
   selectedOrderIds = new Set();
@@ -1115,7 +1151,9 @@ function render(){
   } else if(currentTab === 'stocks'){
     renderStocks();
   } else {
-    if(supplierStocksViewKey){ renderSupplierStockList(); } else { renderSuppliersDirectory(); }
+    if(editingSupplierKey){ renderEditSupplierForm(); }
+    else if(supplierStocksViewKey){ renderSupplierStockList(); }
+    else { renderSuppliersDirectory(); }
   }
 }
 
@@ -1513,7 +1551,7 @@ function renderOrdersList(status){
           <button class="sb-cancel" title="Cancel selection" onclick="cancelSelection()">✕</button>
           <span class="sb-count">${selectedOrderIds.size} selected</span>
         </div>
-        <button class="sb-delete" title="Delete selected" onclick="deleteSelectedOrders()" ${selectedOrderIds.size === 0 ? 'disabled' : ''}>🗑</button>
+        <button class="sb-delete" title="Delete selected" onclick="deleteSelectedOrders()" ${selectedOrderIds.size === 0 ? 'disabled' : ''}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 20 7"/><path d="M6 7V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2"/><path d="M19 7l-1 13a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 7"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>
       </div>
     `;
   } else {
@@ -1692,20 +1730,18 @@ function renderOrderDetail(){
     </p>
     <div class="section-label"><span class="left"><span class="num">·</span><h2>Order items (${o.items.length})</h2></span></div>
     <p class="section-sub">${editable ? 'Adjust quantities or remove a line if it needs correcting.' : 'This order has already been sent, so items can\'t be changed.'}</p>
-    <div class="card" id="orderDetailItemsWrap"></div>
+    <div class="list-card" id="orderDetailItemsWrap"></div>
   `;
 
   if(editable){
     html += `
       <div class="section-label"><span class="left"><span class="num">·</span><h2>Add another item</h2></span></div>
-      <div class="card">
-        <div class="search-wrap">
-          <span class="sicon">⌕</span>
-          <input id="f-orderdetail-search" placeholder="Search this supplier's stock…" autocomplete="off"
-            value="${escapeHtml(orderDetailSearch)}" oninput="orderDetailSearch=this.value; renderOrderDetailAddResults()">
-        </div>
-        <div id="orderDetailAddResultsWrap"></div>
+      <div class="search-wrap">
+        <span class="sicon">⌕</span>
+        <input id="f-orderdetail-search" placeholder="Search this supplier's stock…" autocomplete="off"
+          value="${escapeHtml(orderDetailSearch)}" oninput="orderDetailSearch=this.value; renderOrderDetailAddResults()">
       </div>
+      <div id="orderDetailAddResultsWrap"></div>
     `;
   }
 
@@ -1825,7 +1861,7 @@ function renderStocks(){
           <button class="sb-cancel" title="Cancel selection" onclick="cancelStockSelection()">✕</button>
           <span class="sb-count">${selectedStockIds.size} selected</span>
         </div>
-        <button class="sb-delete" title="Delete selected" onclick="deleteSelectedStocks()" ${selectedStockIds.size === 0 ? 'disabled' : ''}>🗑</button>
+        <button class="sb-delete" title="Delete selected" onclick="deleteSelectedStocks()" ${selectedStockIds.size === 0 ? 'disabled' : ''}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 20 7"/><path d="M6 7V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2"/><path d="M19 7l-1 13a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 7"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>
       </div>
     `;
   } else {
@@ -1909,10 +1945,9 @@ function renderStocksList(){
           <div class="meta">${escapeHtml(s.supplierName)} · ${escapeHtml(s.supplierPhone)}</div>
         </div>
         <span class="unit-pill">${escapeHtml(s.unit)}</span>
-        ${inSelection ? '' : `
+        ${inSelection ? `
           <button class="icon-btn" title="Edit" onclick="event.stopPropagation(); startEditStock('${s.id}')">✎</button>
-          <button class="icon-btn danger" title="Remove" onclick="event.stopPropagation(); removeStock('${s.id}')">✕</button>
-        `}
+        ` : ''}
       </div>
     `;
   });
@@ -2093,7 +2128,7 @@ function renderSuppliersDirectory(){
           <button class="sb-cancel" title="Cancel selection" onclick="cancelSupplierSelection()">✕</button>
           <span class="sb-count">${selectedSupplierKeys.size} selected</span>
         </div>
-        <button class="sb-delete" title="Delete selected" onclick="deleteSelectedSuppliers()" ${selectedSupplierKeys.size === 0 ? 'disabled' : ''}>🗑</button>
+        <button class="sb-delete" title="Delete selected" onclick="deleteSelectedSuppliers()" ${selectedSupplierKeys.size === 0 ? 'disabled' : ''}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 20 7"/><path d="M6 7V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2"/><path d="M19 7l-1 13a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 7"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>
       </div>
     `;
   } else {
@@ -2173,6 +2208,9 @@ function renderSuppliersList(){
             <div class="sphone">${escapeHtml(sup.phone)}</div>
           </div>
           <div class="sitems">${sup.items.length} item${sup.items.length===1?'':'s'}</div>
+          ${supplierSelectionMode ? `
+            <button class="icon-btn" title="Edit supplier" onclick="event.stopPropagation(); startEditSupplier('${key}')">✎</button>
+          ` : ''}
         </div>
       </div>
     `;
@@ -2277,6 +2315,97 @@ function closeSupplierStocksView(){
   render();
 }
 
+function startEditSupplier(key){
+  editingSupplierKey = key;
+  supplierSelectionMode = false;
+  selectedSupplierKeys = new Set();
+  render();
+}
+
+function closeEditSupplier(){
+  editingSupplierKey = null;
+  render();
+}
+
+function renderEditSupplierForm(){
+  const suppliers = getSuppliers();
+  const sup = suppliers.find(s=> supplierKey(s.name, s.phone) === editingSupplierKey);
+  if(!sup){ editingSupplierKey = null; render(); return; }
+
+  const html = `
+    <div class="review-header">
+      <button class="back-btn" onclick="closeEditSupplier()">←</button>
+      <div class="who"><h2>Edit supplier</h2></div>
+    </div>
+    <p class="section-sub" style="margin:-2px 0 12px 0;">⚠ Changing these updates every item and order linked to this supplier.</p>
+    <div class="card">
+      <label for="f-esname">Supplier name</label>
+      <input id="f-esname" placeholder="e.g. Cash & Carry Ltd" autocomplete="off" value="${escapeHtml(sup.name)}">
+
+      <label for="f-esphone">Supplier phone (WhatsApp number)</label>
+      <input id="f-esphone" placeholder="e.g. +447700900123" autocomplete="off" inputmode="tel"
+        value="${escapeHtml(sup.phone)}"
+        oninput="sanitizePhoneField(this)">
+
+      <button class="primary" onclick="submitEditSupplierForm()">Save changes</button>
+      <button class="ghost" onclick="closeEditSupplier()">Cancel</button>
+    </div>
+  `;
+
+  mainEl.innerHTML = html;
+}
+
+function submitEditSupplierForm(){
+  const name = document.getElementById('f-esname').value.trim();
+  const phone = document.getElementById('f-esphone').value.trim();
+
+  if(!name || !phone){
+    showToast('Enter both a supplier name and phone number');
+    return;
+  }
+
+  const oldKey = editingSupplierKey;
+  const newKey = supplierKey(name, phone);
+
+  const otherSuppliers = getSuppliers().filter(s=> supplierKey(s.name, s.phone) !== oldKey);
+
+  const dupSameKey = otherSuppliers.find(s=> supplierKey(s.name, s.phone) === newKey);
+  if(dupSameKey){
+    showToast(`A supplier named "${dupSameKey.name}" with this phone number already exists`);
+    return;
+  }
+
+  const dupSameName = otherSuppliers.find(s=> s.name.trim().toLowerCase() === name.toLowerCase());
+  if(dupSameName){
+    showToast(`Supplier "${name}" already exists with a different phone number`);
+    return;
+  }
+
+  stocks.forEach(s=>{
+    if(supplierKey(s.supplierName, s.supplierPhone) === oldKey){
+      s.supplierName = name;
+      s.supplierPhone = phone;
+    }
+  });
+
+  orderHistory.forEach(o=>{
+    if(o.supplierKey === oldKey){
+      o.supplierKey = newKey;
+      o.supplierName = name;
+      o.supplierPhone = phone;
+    }
+  });
+
+  saveStocks();
+  saveOrderHistory();
+
+  editingSupplierKey = null;
+  if(supplierStocksViewKey === oldKey) supplierStocksViewKey = newKey;
+
+  render();
+  showToast('Supplier updated');
+}
+
 function renderSupplierStockList(){
   const suppliers = getSuppliers();
   const sup = suppliers.find(s=> supplierKey(s.name, s.phone) === supplierStocksViewKey);
@@ -2289,6 +2418,7 @@ function renderSupplierStockList(){
         <h2>${escapeHtml(sup.name)}</h2>
         <div class="ph">${escapeHtml(sup.phone)}</div>
       </div>
+      <button class="icon-btn" title="Edit supplier" onclick="startEditSupplier('${supplierStocksViewKey}')">✎</button>
     </div>
     <div class="section-label"><span class="left"><span class="num">·</span><h2>Items (${sup.items.length})</h2></span></div>
     <p class="section-sub">Tap an item to add a quantity to your order.</p>
@@ -2301,6 +2431,7 @@ function renderSupplierStockList(){
         <span class="idx">${String(i+1).padStart(3,'0')}</span>
         <div class="info">
           <div class="name">${escapeHtml(item.name)}</div>
+          <div class="meta">${escapeHtml(sup.name)}</div>
         </div>
         <span class="unit-pill">${escapeHtml(item.unit)}</span>
       </div>
