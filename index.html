@@ -65,7 +65,12 @@
     color:#9AA5B1;
   }
 
-  main{ flex:1; padding:18px 16px 96px 16px; }
+  main{ flex:1; padding:18px 16px 96px 16px; touch-action:pan-y; }
+  main.tab-anim{ animation:tabFade .18s ease; }
+  @keyframes tabFade{
+    from{ opacity:0; transform:translateY(6px); }
+    to{ opacity:1; transform:translateY(0); }
+  }
 
   /* Bottom nav */
   nav.bottom-tabs{
@@ -94,11 +99,14 @@
     padding:8px 2px 6px 2px;
     position:relative;
   }
-  nav.bottom-tabs button .bn-num{
-    font-family:'IBM Plex Mono', monospace;
-    font-size:9.5px;
-    letter-spacing:0.5px;
+  nav.bottom-tabs button .bn-icon{
+    width:20px;
+    height:20px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
   }
+  nav.bottom-tabs button .bn-icon svg{ width:100%; height:100%; display:block; }
   nav.bottom-tabs button .bn-label{
     font-family:'Space Grotesk', sans-serif;
     font-weight:600;
@@ -107,7 +115,7 @@
     text-transform:uppercase;
   }
   nav.bottom-tabs button.active{ color:var(--paper); }
-  nav.bottom-tabs button.active .bn-num{ color:var(--amber); }
+  nav.bottom-tabs button.active .bn-icon{ color:var(--amber); }
   nav.bottom-tabs button.active::after{
     content:'';
     position:absolute;
@@ -175,6 +183,13 @@
     border:1px solid var(--line);
     border-radius:var(--radius);
     padding:16px;
+    margin-bottom:14px;
+  }
+  .list-card{
+    background:var(--paper-raised);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:2px 12px;
     margin-bottom:14px;
   }
 
@@ -291,77 +306,115 @@
   .ledger-row{
     display:flex;
     align-items:center;
-    gap:10px;
-    padding:13px 4px;
+    gap:8px;
+    padding:7px 2px;
     border-bottom:1px dashed var(--line);
+    transition:background .1s ease;
+    content-visibility:auto;
+    contain-intrinsic-size:0 38px;
   }
   .ledger-row:last-child{ border-bottom:none; }
+  .ledger-row.selecting{ cursor:pointer; }
+  .ledger-row.selected{ background:#FBF1DF; }
   .ledger-row .idx{
     font-family:'IBM Plex Mono', monospace;
-    font-size:11px;
+    font-size:10px;
     color:var(--slate);
-    width:24px;
+    width:20px;
     flex-shrink:0;
   }
   .ledger-row .info{ flex:1; min-width:0; }
-  .ledger-row .name{ font-weight:600; font-size:14.5px; color:var(--ink); }
+  .ledger-row .name{ font-weight:600; font-size:14px; color:var(--ink); line-height:1.3; }
   .ledger-row .meta{
     font-family:'IBM Plex Mono', monospace;
-    font-size:11.5px;
+    font-size:10.5px;
     color:var(--slate);
-    margin-top:2px;
+    margin-top:1px;
     overflow:hidden;
     text-overflow:ellipsis;
     white-space:nowrap;
   }
   .ledger-row .unit-pill{
     font-family:'IBM Plex Mono', monospace;
-    font-size:11px;
+    font-size:10px;
     background:var(--paper);
     border:1px solid var(--line);
     border-radius:5px;
-    padding:3px 8px;
+    padding:2px 6px;
     color:var(--ink-soft);
     flex-shrink:0;
+  }
+  .row-check{
+    width:17px; height:17px;
+    border-radius:50%;
+    border:2px solid var(--line);
+    background:var(--paper-raised);
+    display:flex; align-items:center; justify-content:center;
+    flex-shrink:0;
+  }
+  .row-check.checked{
+    border-color:var(--whatsapp);
+    background:var(--whatsapp);
+  }
+  .row-check.checked::after{
+    content:'✓';
+    color:#fff;
+    font-size:10px;
+    font-weight:700;
+    line-height:1;
   }
   .icon-btn{
     background:none;
     border:none;
     color:var(--slate);
     cursor:pointer;
-    font-size:14px;
-    padding:4px 5px;
+    font-size:13px;
+    padding:3px 4px;
     flex-shrink:0;
   }
   .icon-btn:hover{ color:var(--ink); }
   .icon-btn.danger:hover{ color:var(--danger); }
 
+  .load-sentinel{
+    text-align:center;
+    padding:14px 4px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    color:var(--slate);
+  }
+
   .supplier-card{
     background:var(--paper-raised);
     border:1px solid var(--line);
     border-radius:var(--radius);
-    padding:16px;
-    margin-bottom:12px;
+    padding:10px 14px;
+    margin-bottom:8px;
     cursor:pointer;
-    transition:border-color .15s ease;
+    transition:border-color .15s ease, background .1s ease;
+    content-visibility:auto;
+    contain-intrinsic-size:0 64px;
   }
   .supplier-card:hover{ border-color:var(--amber-deep); }
+  .supplier-card.selected{ background:#FBF1DF; border-color:var(--amber-deep); }
   .supplier-card .top-row{
     display:flex;
-    justify-content:space-between;
-    align-items:flex-start;
+    align-items:center;
+    gap:10px;
   }
-  .supplier-card .sname{ font-family:'Space Grotesk', sans-serif; font-weight:600; font-size:15.5px; }
-  .supplier-card .sphone{ font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--slate); margin-top:3px; }
+  .supplier-card .sinfo{ flex:1; min-width:0; }
+  .supplier-card .sname{ font-family:'Space Grotesk', sans-serif; font-weight:600; font-size:14px; }
+  .supplier-card .sphone{ font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--slate); margin-top:2px; }
   .supplier-card .sitems{
     font-family:'IBM Plex Mono', monospace;
-    font-size:11px;
+    font-size:10px;
     color:var(--amber-deep);
     background:#FBF1DF;
     border-radius:5px;
-    padding:4px 8px;
+    padding:3px 7px;
     white-space:nowrap;
+    flex-shrink:0;
   }
+
 
   .empty{ text-align:center; padding:50px 20px; color:var(--slate); }
   .empty .glyph{ font-family:'IBM Plex Mono', monospace; font-size:26px; color:var(--line); margin-bottom:10px; }
@@ -468,21 +521,23 @@
     font-family:'Space Grotesk', sans-serif; font-weight:600; font-size:14px; color:var(--ink);
   }
   .select-bar .sb-delete{
+    width:38px;
+    height:38px;
+    flex-shrink:0;
     background:var(--danger);
     color:#fff;
     border:none;
-    border-radius:7px;
-    padding:8px 14px;
-    font-family:'Space Grotesk', sans-serif;
-    font-weight:600;
-    font-size:12.5px;
+    border-radius:50%;
+    font-size:16px;
     cursor:pointer;
     display:flex;
     align-items:center;
-    gap:6px;
-    flex-shrink:0;
+    justify-content:center;
+    box-shadow:0 3px 8px rgba(179,73,47,.35);
+    transition:transform .1s ease, box-shadow .1s ease;
   }
-  .select-bar .sb-delete:disabled{ opacity:.4; cursor:not-allowed; }
+  .select-bar .sb-delete:active{ transform:scale(0.94); }
+  .select-bar .sb-delete:disabled{ opacity:.35; cursor:not-allowed; box-shadow:none; }
   .status-pill{
     font-family:'IBM Plex Mono', monospace;
     font-size:10px;
@@ -494,6 +549,77 @@
   }
   .status-pill.active{ background:#FBF1DF; color:var(--amber-deep); }
   .status-pill.completed{ background:#E8F5EC; color:var(--whatsapp); }
+
+  .confirm-overlay{
+    position:fixed; inset:0;
+    background:rgba(27,36,48,0.45);
+    display:none;
+    align-items:center;
+    justify-content:center;
+    z-index:200;
+    padding:20px;
+  }
+  .confirm-overlay.show{ display:flex; }
+  .confirm-box{
+    background:var(--paper-raised);
+    border-radius:14px;
+    padding:22px 20px 18px 20px;
+    max-width:340px;
+    width:100%;
+    box-shadow:0 16px 40px rgba(27,36,48,.25);
+  }
+  .confirm-msg{
+    font-family:'Space Grotesk', sans-serif;
+    font-size:14.5px;
+    color:var(--ink);
+    white-space:pre-line;
+    line-height:1.55;
+    margin:0 0 18px 0;
+  }
+  .confirm-actions{ display:flex; gap:10px; }
+  .confirm-actions button{
+    flex:1;
+    padding:11px 0;
+    border-radius:8px;
+    border:none;
+    font-family:'Space Grotesk', sans-serif;
+    font-weight:600;
+    font-size:13.5px;
+    cursor:pointer;
+  }
+  .confirm-cancel{ background:var(--paper); border:1px solid var(--line) !important; color:var(--ink-soft); }
+  .confirm-ok{ background:var(--amber-deep); color:#fff; }
+  .confirm-ok.danger{ background:var(--danger); }
+  .confirm-qty-list{ max-height:240px; overflow-y:auto; margin-bottom:16px; }
+  .confirm-qty-row{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    margin-bottom:10px;
+  }
+  .confirm-qty-row label{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12.5px;
+    color:var(--ink-soft);
+    flex:1;
+    min-width:0;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .confirm-qty-row input{
+    width:72px;
+    flex-shrink:0;
+    padding:7px 8px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13px;
+    text-align:right;
+    background:var(--paper);
+    color:var(--ink);
+  }
 
 
   .modal-overlay{
@@ -522,7 +648,7 @@
   .modal-unit{ font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--slate); margin-top:2px; }
   .modal-card input.qty-input{
     width:100%;
-    text-align:center;
+    text-align:left;
     padding:12px;
     font-family:'IBM Plex Mono', monospace;
     font-weight:600;
@@ -559,7 +685,6 @@
   <header class="top">
     <div class="brand">
       <h1>Stock<span class="mark">line</span></h1>
-      <span class="count" id="headerCount"></span>
     </div>
   </header>
 
@@ -567,24 +692,24 @@
 
   <nav class="bottom-tabs">
     <button id="tabOrderBtn" onclick="switchTab('order')">
-      <span class="bn-num">01</span>
+      <span class="bn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg></span>
       <span class="bn-label">Order</span>
     </button>
     <button id="tabActiveBtn" onclick="switchTab('active')">
-      <span class="bn-num">02</span>
+      <span class="bn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg></span>
       <span class="bn-label">Active</span>
       <span class="bn-badge" id="activeBadge" style="display:none;"></span>
     </button>
     <button id="tabCompletedBtn" onclick="switchTab('completed')">
-      <span class="bn-num">03</span>
+      <span class="bn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="7.5 12.5 10.5 15.5 16.5 8.5"/></svg></span>
       <span class="bn-label">Completed</span>
     </button>
     <button id="tabStocksBtn" onclick="switchTab('stocks')">
-      <span class="bn-num">04</span>
-      <span class="bn-label">Stocks</span>
+      <span class="bn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="M3.27 7 12 12l8.73-5"/><path d="M12 22V12"/></svg></span>
+      <span class="bn-label">Items</span>
     </button>
     <button id="tabSuppliersBtn" onclick="switchTab('suppliers')">
-      <span class="bn-num">05</span>
+      <span class="bn-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c0-3.3 2.5-5.5 5.5-5.5s5.5 2.2 5.5 5.5"/><circle cx="17.5" cy="8.5" r="2.5"/><path d="M15.7 13.7c2.4.3 4.3 2.3 4.3 5.3"/></svg></span>
       <span class="bn-label">Suppliers</span>
     </button>
   </nav>
@@ -613,6 +738,7 @@ let editingStockId = null;
 let stocksSearch = '';
 let stocksSort = 'az';
 let suppliersSort = 'az';
+let suppliersSearch = '';
 let reviewQty = {};
 let reviewSearch = '';
 let loaded = false;
@@ -629,10 +755,73 @@ let selectionTab = null;
 let selectedOrderIds = new Set();
 let longPressTimer = null;
 let longPressFired = false;
+let stockSelectionMode = false;
+let selectedStockIds = new Set();
+let supplierSelectionMode = false;
+let selectedSupplierKeys = new Set();
+const RENDER_BATCH = 150;
+let stocksRenderLimit = RENDER_BATCH;
+let suppliersRenderLimit = RENDER_BATCH;
+let stocksIO = null;
+let suppliersIO = null;
 
 const mainEl = document.getElementById('main');
 const toastEl = document.getElementById('toast');
 const TABS = ['order','active','completed','stocks','suppliers'];
+
+/* ---------- SWIPE NAVIGATION BETWEEN TABS ---------- */
+
+let swipeStartX = 0;
+let swipeStartY = 0;
+let swipeStartTime = 0;
+const SWIPE_MIN_DISTANCE = 55;
+const SWIPE_MAX_VERTICAL = 70;
+const SWIPE_MAX_TIME = 600;
+
+function isInNestedView(){
+  return !!(
+    reviewingSupplierKey || viewingOrderId || supplierStocksViewKey ||
+    editingStockId || addingNewStock ||
+    stockSelectionMode || supplierSelectionMode || selectionMode
+  );
+}
+
+function isOverlayOpen(){
+  const modal = document.getElementById('modalOverlay');
+  const confirmOverlay = document.getElementById('appConfirmOverlay');
+  return (modal && modal.classList.contains('show')) ||
+         (confirmOverlay && confirmOverlay.classList.contains('show'));
+}
+
+function handleSwipeStart(e){
+  const t = e.touches[0];
+  swipeStartX = t.clientX;
+  swipeStartY = t.clientY;
+  swipeStartTime = Date.now();
+}
+
+function handleSwipeEnd(e){
+  if(isInNestedView() || isOverlayOpen()) return;
+
+  const t = e.changedTouches[0];
+  const dx = t.clientX - swipeStartX;
+  const dy = t.clientY - swipeStartY;
+  const dt = Date.now() - swipeStartTime;
+
+  if(dt > SWIPE_MAX_TIME) return;
+  if(Math.abs(dx) < SWIPE_MIN_DISTANCE) return;
+  if(Math.abs(dy) > SWIPE_MAX_VERTICAL) return;
+
+  const idx = TABS.indexOf(currentTab);
+  if(dx < 0 && idx < TABS.length - 1){
+    switchTab(TABS[idx + 1]);
+  } else if(dx > 0 && idx > 0){
+    switchTab(TABS[idx - 1]);
+  }
+}
+
+mainEl.addEventListener('touchstart', handleSwipeStart, { passive:true });
+mainEl.addEventListener('touchend', handleSwipeEnd, { passive:true });
 
 function showToast(msg){
   toastEl.textContent = msg;
@@ -640,8 +829,173 @@ function showToast(msg){
   setTimeout(()=> toastEl.classList.remove('show'), 2200);
 }
 
+function showAppConfirm(opts){
+  const { message, confirmLabel = 'Confirm', danger = false, onConfirm, onCancel } = opts;
+
+  let overlay = document.getElementById('appConfirmOverlay');
+  if(!overlay){
+    overlay = document.createElement('div');
+    overlay.id = 'appConfirmOverlay';
+    overlay.className = 'confirm-overlay';
+    document.body.appendChild(overlay);
+  }
+
+  overlay.innerHTML = `
+    <div class="confirm-box">
+      <p class="confirm-msg">${escapeHtml(message)}</p>
+      <div class="confirm-actions">
+        <button class="confirm-cancel" id="appConfirmCancelBtn">Cancel</button>
+        <button class="confirm-ok ${danger ? 'danger' : ''}" id="appConfirmOkBtn">${escapeHtml(confirmLabel)}</button>
+      </div>
+    </div>
+  `;
+  overlay.classList.add('show');
+
+  const close = ()=>{ overlay.classList.remove('show'); };
+
+  document.getElementById('appConfirmCancelBtn').onclick = ()=>{
+    close();
+    if(onCancel) onCancel();
+  };
+  document.getElementById('appConfirmOkBtn').onclick = ()=>{
+    close();
+    if(onConfirm) onConfirm();
+  };
+  overlay.onclick = (e)=>{
+    if(e.target === overlay){
+      close();
+      if(onCancel) onCancel();
+    }
+  };
+}
+
+function showAppAlert(message, title){
+  let overlay = document.getElementById('appConfirmOverlay');
+  if(!overlay){
+    overlay = document.createElement('div');
+    overlay.id = 'appConfirmOverlay';
+    overlay.className = 'confirm-overlay';
+    document.body.appendChild(overlay);
+  }
+
+  overlay.innerHTML = `
+    <div class="confirm-box">
+      ${title ? `<p class="confirm-msg" style="font-weight:600; margin-bottom:4px;">${escapeHtml(title)}</p>` : ''}
+      <p class="confirm-msg">${escapeHtml(message)}</p>
+      <div class="confirm-actions">
+        <button class="confirm-ok" id="appConfirmOkBtn" style="width:100%">OK</button>
+      </div>
+    </div>
+  `;
+  overlay.classList.add('show');
+
+  const close = ()=>{ overlay.classList.remove('show'); };
+  document.getElementById('appConfirmOkBtn').onclick = close;
+  overlay.onclick = (e)=>{ if(e.target === overlay) close(); };
+}
+
 function uid(){
   return 's' + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+}
+
+function showDuplicateItemModal(order, item, existingLine, newQty){
+  let overlay = document.getElementById('appConfirmOverlay');
+  if(!overlay){
+    overlay = document.createElement('div');
+    overlay.id = 'appConfirmOverlay';
+    overlay.className = 'confirm-overlay';
+    document.body.appendChild(overlay);
+  }
+
+  const prefill = (newQty && newQty > 0) ? newQty : existingLine.qty;
+
+  overlay.innerHTML = `
+    <div class="confirm-box">
+      <p class="confirm-msg">"${escapeHtml(item.name)}" is already in the active order for ${escapeHtml(item.supplierName)}, with a quantity of ${existingLine.qty} ${escapeHtml(item.unit)}. Update it to the new quantity?</p>
+      <div class="confirm-qty-row">
+        <label for="dupQtyInput">${escapeHtml(item.name)} (${escapeHtml(item.unit)})</label>
+        <input type="number" min="0" inputmode="numeric" id="dupQtyInput" value="${prefill}">
+      </div>
+      <div class="confirm-actions">
+        <button class="confirm-cancel" id="appConfirmCancelBtn">Cancel</button>
+        <button class="confirm-ok" id="appConfirmOkBtn">Update quantity</button>
+      </div>
+    </div>
+  `;
+  overlay.classList.add('show');
+
+  const close = ()=>{ overlay.classList.remove('show'); };
+
+  document.getElementById('appConfirmCancelBtn').onclick = ()=>{ close(); };
+  overlay.onclick = (e)=>{ if(e.target === overlay) close(); };
+
+  document.getElementById('appConfirmOkBtn').onclick = ()=>{
+    const val = parseFloat(document.getElementById('dupQtyInput').value);
+    if(!val || val <= 0){ showToast('Enter a valid quantity'); return; }
+    existingLine.qty = val;
+    saveOrderHistory();
+    close();
+    orderSearchQuery = '';
+    orderSelectedItemId = null;
+    orderQty = '';
+    render();
+    showToast('Quantity updated in the active order');
+  };
+}
+
+function showDuplicateBatchModal(order, duplicates){
+  let overlay = document.getElementById('appConfirmOverlay');
+  if(!overlay){
+    overlay = document.createElement('div');
+    overlay.id = 'appConfirmOverlay';
+    overlay.className = 'confirm-overlay';
+    document.body.appendChild(overlay);
+  }
+
+  const rowsHtml = duplicates.map((d, i)=> `
+    <div class="confirm-qty-row">
+      <label for="dupBatchQty${i}">${escapeHtml(d.item.name)} (${escapeHtml(d.item.unit)}) — currently ${d.existingLine.qty}</label>
+      <input type="number" min="0" inputmode="numeric" id="dupBatchQty${i}" value="${d.existingLine.qty}">
+    </div>
+  `).join('');
+
+  overlay.innerHTML = `
+    <div class="confirm-box">
+      <p class="confirm-msg">${duplicates.length} item${duplicates.length === 1 ? '' : 's'} already in the active order for ${escapeHtml(order.supplierName)}. Do you want to update the quantities?</p>
+      <div class="confirm-qty-list">${rowsHtml}</div>
+      <div class="confirm-actions">
+        <button class="confirm-cancel" id="appConfirmCancelBtn">Skip these</button>
+        <button class="confirm-ok" id="appConfirmOkBtn">Update quantities</button>
+      </div>
+    </div>
+  `;
+  overlay.classList.add('show');
+
+  const close = ()=>{ overlay.classList.remove('show'); };
+
+  document.getElementById('appConfirmCancelBtn').onclick = ()=>{
+    close();
+    showToast('Order updated — send it via WhatsApp from Active');
+    switchTab('active');
+  };
+  overlay.onclick = (e)=>{
+    if(e.target === overlay){
+      close();
+      showToast('Order updated — send it via WhatsApp from Active');
+      switchTab('active');
+    }
+  };
+
+  document.getElementById('appConfirmOkBtn').onclick = ()=>{
+    duplicates.forEach((d, i)=>{
+      const val = parseFloat(document.getElementById('dupBatchQty' + i).value);
+      if(val && val > 0){ d.existingLine.qty = val; }
+    });
+    saveOrderHistory();
+    close();
+    showToast('Quantities updated in the active order');
+    switchTab('active');
+  };
 }
 
 async function loadData(){
@@ -681,10 +1035,19 @@ function switchTab(tab){
   selectionMode = false;
   selectionTab = null;
   selectedOrderIds = new Set();
+  stockSelectionMode = false;
+  selectedStockIds = new Set();
+  supplierSelectionMode = false;
+  selectedSupplierKeys = new Set();
+  stocksRenderLimit = RENDER_BATCH;
+  suppliersRenderLimit = RENDER_BATCH;
   TABS.forEach(t=>{
     document.getElementById('tab' + capitalize(t) + 'Btn').classList.toggle('active', t === tab);
   });
   render();
+  mainEl.classList.remove('tab-anim');
+  void mainEl.offsetWidth;
+  mainEl.classList.add('tab-anim');
 }
 
 function capitalize(s){ return s.charAt(0).toUpperCase() + s.slice(1); }
@@ -723,10 +1086,16 @@ function getSuppliers(){
   return list;
 }
 
-function render(){
-  document.getElementById('headerCount').textContent =
-    stocks.length ? stocks.length + ' item' + (stocks.length===1?'':'s') + ' on file' : '';
+function findActiveOrderForStock(item){
+  const key = supplierKey(item.supplierName, item.supplierPhone);
+  return orderHistory.find(o=>
+    o.status === 'active' &&
+    o.supplierKey === key &&
+    o.items.some(li=> li.name === item.name && li.unit === item.unit)
+  );
+}
 
+function render(){
   const activeCount = orderHistory.filter(o=> o.status === 'active').length;
   const badge = document.getElementById('activeBadge');
   if(activeCount > 0){ badge.style.display = 'inline-block'; badge.textContent = activeCount; }
@@ -756,15 +1125,15 @@ function renderOrderPicker(){
   if(editingStockId || addingNewStock){ renderStockForm(); return; }
 
   let html = `
-    <div class="section-label"><span class="left"><span class="num">01</span><h2>Add to order</h2></span></div>
+    <div class="section-label"><span class="left"><h2>Add to order</h2></span></div>
     <div class="card">
-      <label for="f-order-search">Search & select stock item</label>
+      <label for="f-order-search">Search & select item</label>
       <div class="search-wrap has-add-btn">
         <span class="sicon">⌕</span>
         <input id="f-order-search" placeholder="Type item name to filter…" autocomplete="off"
           value="${escapeHtml(orderSearchQuery)}"
           oninput="orderSearchQuery=this.value; orderSelectedItemId=null; renderOrderSearchResults()">
-        <button class="add-icon-btn" title="Add new stock item" onclick="openAddStockPage()">＋</button>
+        <button class="add-icon-btn" title="Add new item" onclick="openAddStockPage()">＋</button>
       </div>
       <div id="orderSearchResultsWrap"></div>
 
@@ -790,7 +1159,7 @@ function renderOrderSearchResults(){
   const matches = stocks.filter(s=> s.name.toLowerCase().includes(q)).slice(0, 8);
 
   if(matches.length === 0){
-    wrap.innerHTML = `<div class="search-results"><div class="sr-empty">No matching stock items — tap + to add one.</div></div>`;
+    wrap.innerHTML = `<div class="search-results"><div class="sr-empty">No matching items — tap + to add one.</div></div>`;
     return;
   }
 
@@ -805,6 +1174,18 @@ function renderOrderSearchResults(){
 function selectOrderItem(id){
   const item = stocks.find(s=> s.id === id);
   if(!item) return;
+
+  const existingOrder = findActiveOrderForStock(item);
+  if(existingOrder){
+    const existingLine = existingOrder.items.find(li=> li.name === item.name && li.unit === item.unit);
+    orderSearchQuery = '';
+    orderSelectedItemId = null;
+    orderQty = '';
+    render();
+    showDuplicateItemModal(existingOrder, item, existingLine);
+    return;
+  }
+
   orderSelectedItemId = id;
   orderSearchQuery = item.name;
 
@@ -821,13 +1202,22 @@ function selectOrderItem(id){
 
 function addSearchedItemToOrder(){
   const item = stocks.find(s=> s.id === orderSelectedItemId);
-  if(!item){ showToast('Search and select a stock item first'); return; }
+  if(!item){ showToast('Search and select an item first'); return; }
 
   const qty = parseFloat(orderQty);
   if(!qty || qty <= 0){ showToast('Enter a valid quantity'); return; }
 
   const key = supplierKey(item.supplierName, item.supplierPhone);
   let order = orderHistory.find(o=> o.supplierKey === key && o.status === 'active');
+
+  if(order){
+    const existingLine = order.items.find(li=> li.name === item.name && li.unit === item.unit);
+    if(existingLine){
+      showDuplicateItemModal(order, item, existingLine, qty);
+      return;
+    }
+  }
+
   if(!order){
     order = {
       id: uid(),
@@ -841,9 +1231,7 @@ function addSearchedItemToOrder(){
     orderHistory.push(order);
   }
 
-  const existingLine = order.items.find(li=> li.name === item.name && li.unit === item.unit);
-  if(existingLine){ existingLine.qty = qty; } else { order.items.push({ name: item.name, unit: item.unit, qty }); }
-
+  order.items.push({ name: item.name, unit: item.unit, qty });
   saveOrderHistory();
 
   orderSearchQuery = '';
@@ -871,11 +1259,11 @@ function renderStockForm(){
   let html = `
     <div class="review-header">
       <button class="back-btn" onclick="closeStockForm()">←</button>
-      <div class="who"><h2>${editing ? 'Edit stock item' : 'Add stock item'}</h2></div>
+      <div class="who"><h2>${editing ? 'Edit item' : 'Add item'}</h2></div>
     </div>
-    <p class="section-sub" style="margin:-2px 0 12px 0;">⚠ Stock names must be unique, and a supplier name must always use the same phone number.</p>
+    <p class="section-sub" style="margin:-2px 0 12px 0;">⚠ Item names must be unique, and a supplier name must always use the same phone number.</p>
     <div class="card">
-      <label for="f-name">Stock name</label>
+      <label for="f-name">Item name</label>
       <input id="f-name" placeholder="e.g. Basmati rice, 25kg bag" autocomplete="off" value="${editing ? escapeHtml(editing.name) : ''}">
 
       <label for="f-unit">Unit</label>
@@ -894,7 +1282,7 @@ function renderStockForm(){
         value="${editing ? escapeHtml(editing.supplierPhone) : ''}"
         oninput="sanitizePhoneField(this)">
 
-      <button class="primary" onclick="submitStockForm()">${editing ? 'Save changes' : 'Add stock item'}</button>
+      <button class="primary" onclick="submitStockForm()">${editing ? 'Save changes' : 'Add item'}</button>
       <button class="ghost" onclick="closeStockForm()">Cancel</button>
     </div>
   `;
@@ -983,7 +1371,7 @@ function reorderFromEntry(orderId){
   const entry = orderHistory.find(o=> o.id === orderId);
   if(!entry) return;
   const sup = getSuppliers().find(s=> supplierKey(s.name, s.phone) === entry.supplierKey);
-  if(!sup){ showToast('That supplier no longer has stock items on file'); return; }
+  if(!sup){ showToast('That supplier no longer has items on file'); return; }
   openReview(entry.supplierKey);
   prefillQtyFromEntry(entry, sup.items);
   renderReview();
@@ -1005,9 +1393,9 @@ function renderReview(){
         <div class="ph">${escapeHtml(sup.phone)}</div>
       </div>
     </div>
-    <div class="section-label"><span class="left"><span class="num">·</span><h2>Search stock item</h2></span></div>
+    <div class="section-label"><span class="left"><span class="num">·</span><h2>Search item</h2></span></div>
     <div class="card">
-      <label for="f-review-search">Stock name</label>
+      <label for="f-review-search">Item name</label>
       <input id="f-review-search" placeholder="e.g. Basmati rice, 25kg bag" autocomplete="off"
         value="${escapeHtml(reviewSearch)}" oninput="reviewSearch=this.value; renderReviewItems()">
     </div>
@@ -1039,7 +1427,7 @@ function renderReviewItems(){
     : sup.items;
 
   if(items.length === 0){
-    wrap.innerHTML = `<div class="empty"><div class="glyph">⌕</div><p>No stock items match "${escapeHtml(reviewSearch)}" for this supplier.</p></div>`;
+    wrap.innerHTML = `<div class="empty"><div class="glyph">⌕</div><p>No items match "${escapeHtml(reviewSearch)}" for this supplier.</p></div>`;
     return;
   }
 
@@ -1074,19 +1462,39 @@ function createOrder(key){
     return;
   }
 
-  orderHistory.push({
-    id: uid(),
-    supplierKey: key,
-    supplierName: sup.name,
-    supplierPhone: sup.phone,
-    date: new Date().toISOString(),
-    status: 'active',
-    items: lines.map(x=> ({ name: x.item.name, unit: x.item.unit, qty: x.qty }))
+  let order = orderHistory.find(o=> o.supplierKey === key && o.status === 'active');
+  if(!order){
+    order = {
+      id: uid(),
+      supplierKey: key,
+      supplierName: sup.name,
+      supplierPhone: sup.phone,
+      date: new Date().toISOString(),
+      status: 'active',
+      items: []
+    };
+    orderHistory.push(order);
+  }
+
+  const duplicates = [];
+  lines.forEach(x=>{
+    const existingLine = order.items.find(li=> li.name === x.item.name && li.unit === x.item.unit);
+    if(existingLine){
+      duplicates.push({ item: x.item, existingLine, newQty: x.qty });
+    } else {
+      order.items.push({ name: x.item.name, unit: x.item.unit, qty: x.qty });
+    }
   });
+
   saveOrderHistory();
   reviewingSupplierKey = null;
 
-  showToast('Order created — send it via WhatsApp from Active');
+  if(duplicates.length > 0){
+    showDuplicateBatchModal(order, duplicates);
+    return;
+  }
+
+  showToast('Order updated — send it via WhatsApp from Active');
   switchTab('active');
 }
 
@@ -1095,7 +1503,6 @@ function createOrder(key){
 function renderOrdersList(status){
   const list = orderHistory.filter(o=> o.status === status).slice().reverse();
   const label = status === 'active' ? 'Active orders' : 'Completed orders';
-  const num = status === 'active' ? '02' : '03';
   const inSelection = selectionMode && selectionTab === status;
 
   let html = '';
@@ -1106,11 +1513,11 @@ function renderOrdersList(status){
           <button class="sb-cancel" title="Cancel selection" onclick="cancelSelection()">✕</button>
           <span class="sb-count">${selectedOrderIds.size} selected</span>
         </div>
-        <button class="sb-delete" onclick="deleteSelectedOrders()" ${selectedOrderIds.size === 0 ? 'disabled' : ''}>🗑 Delete</button>
+        <button class="sb-delete" title="Delete selected" onclick="deleteSelectedOrders()" ${selectedOrderIds.size === 0 ? 'disabled' : ''}>🗑</button>
       </div>
     `;
   } else {
-    html += `<div class="section-label"><span class="left"><span class="num">${num}</span><h2>${label} (${list.length})</h2></span></div>`;
+    html += `<div class="section-label"><span class="left"><h2>${label} (${list.length})</h2></span></div>`;
   }
 
   if(list.length === 0){
@@ -1205,14 +1612,20 @@ function cancelSelection(){
 function deleteSelectedOrders(){
   if(selectedOrderIds.size === 0) return;
   const count = selectedOrderIds.size;
-  if(!confirm(`Delete ${count} order${count === 1 ? '' : 's'}? This can't be undone.`)) return;
-  orderHistory = orderHistory.filter(o=> !selectedOrderIds.has(o.id));
-  selectionMode = false;
-  selectionTab = null;
-  selectedOrderIds = new Set();
-  saveOrderHistory();
-  render();
-  showToast(`${count} order${count === 1 ? '' : 's'} deleted`);
+  showAppConfirm({
+    message: `Delete ${count} order${count === 1 ? '' : 's'}? This can't be undone.`,
+    confirmLabel: 'Delete',
+    danger: true,
+    onConfirm: ()=>{
+      orderHistory = orderHistory.filter(o=> !selectedOrderIds.has(o.id));
+      selectionMode = false;
+      selectionTab = null;
+      selectedOrderIds = new Set();
+      saveOrderHistory();
+      render();
+      showToast(`${count} order${count === 1 ? '' : 's'} deleted`);
+    }
+  });
 }
 
 function sendToWhatsApp(orderId){
@@ -1404,15 +1817,28 @@ function addItemToOrderDetail(stockId){
 /* ---------- STOCKS TAB ---------- */
 
 function renderStocks(){
-  let html = `
-    <div class="section-label">
-      <span class="left"><span class="num">04</span><h2>All stocks (${stocks.length})</h2></span>
-      <select class="sort-select" onchange="stocksSort=this.value; render()">
-        <option value="az" ${stocksSort==='az'?'selected':''}>A–Z</option>
-        <option value="recent" ${stocksSort==='recent'?'selected':''}>Recently added</option>
-      </select>
-    </div>
-  `;
+  let html = '';
+  if(stockSelectionMode){
+    html += `
+      <div class="select-bar">
+        <div class="sb-left">
+          <button class="sb-cancel" title="Cancel selection" onclick="cancelStockSelection()">✕</button>
+          <span class="sb-count">${selectedStockIds.size} selected</span>
+        </div>
+        <button class="sb-delete" title="Delete selected" onclick="deleteSelectedStocks()" ${selectedStockIds.size === 0 ? 'disabled' : ''}>🗑</button>
+      </div>
+    `;
+  } else {
+    html += `
+      <div class="section-label">
+        <span class="left"><h2>All items (${stocks.length})</h2></span>
+        <select class="sort-select" onchange="stocksSort=this.value; render()">
+          <option value="az" ${stocksSort==='az'?'selected':''}>A–Z</option>
+          <option value="recent" ${stocksSort==='recent'?'selected':''}>Recently added</option>
+        </select>
+      </div>
+    `;
+  }
 
   if(stocks.length > 0){
     html += `
@@ -1427,6 +1853,7 @@ function renderStocks(){
 
   mainEl.innerHTML = html;
   renderStocksList();
+  positionSelectBar();
 }
 
 function getFilteredSortedStocks(){
@@ -1449,9 +1876,10 @@ function renderStocksList(){
   const wrap = document.getElementById('stocksListWrap');
   if(!wrap) return;
   const list = getFilteredSortedStocks();
+  const inSelection = stockSelectionMode;
 
   if(stocks.length === 0){
-    wrap.innerHTML = `<div class="empty"><div class="glyph">·&nbsp;·&nbsp;·</div><p>Nothing logged yet.<br>Add your first stock item from the Order tab to start building your order book.</p></div>`;
+    wrap.innerHTML = `<div class="empty"><div class="glyph">·&nbsp;·&nbsp;·</div><p>Nothing logged yet.<br>Add your first item from the Order tab to start building your order book.</p></div>`;
     return;
   }
   if(list.length === 0){
@@ -1459,23 +1887,120 @@ function renderStocksList(){
     return;
   }
 
-  let html = '<div class="card">';
-  list.forEach((s, i)=>{
+  let html = '<div class="list-card">';
+  const visible = list.slice(0, stocksRenderLimit);
+  visible.forEach((s, i)=>{
+    const isSelected = inSelection && selectedStockIds.has(s.id);
     html += `
-      <div class="ledger-row">
-        <span class="idx">${String(i+1).padStart(3,'0')}</span>
+      <div class="ledger-row ${inSelection ? 'selecting' : ''} ${isSelected ? 'selected' : ''}"
+        onmousedown="handleStockPointerDown('${s.id}')"
+        onmouseup="handleStockPointerUp()"
+        onmouseleave="handleStockPointerUp()"
+        ontouchstart="handleStockPointerDown('${s.id}')"
+        ontouchend="handleStockPointerUp()"
+        ontouchmove="handleStockPointerUp()"
+        oncontextmenu="return false"
+        onclick="handleStockClick('${s.id}')">
+        ${inSelection
+          ? `<div class="row-check ${isSelected ? 'checked' : ''}"></div>`
+          : `<span class="idx">${String(i+1).padStart(3,'0')}</span>`}
         <div class="info">
           <div class="name">${escapeHtml(s.name)}</div>
           <div class="meta">${escapeHtml(s.supplierName)} · ${escapeHtml(s.supplierPhone)}</div>
         </div>
         <span class="unit-pill">${escapeHtml(s.unit)}</span>
-        <button class="icon-btn" title="Edit" onclick="startEditStock('${s.id}')">✎</button>
-        <button class="icon-btn danger" title="Remove" onclick="removeStock('${s.id}')">✕</button>
+        ${inSelection ? '' : `
+          <button class="icon-btn" title="Edit" onclick="event.stopPropagation(); startEditStock('${s.id}')">✎</button>
+          <button class="icon-btn danger" title="Remove" onclick="event.stopPropagation(); removeStock('${s.id}')">✕</button>
+        `}
       </div>
     `;
   });
   html += '</div>';
+  if(list.length > visible.length){
+    html += `<div id="stocksSentinel" class="load-sentinel">Loading more items…</div>`;
+  }
   wrap.innerHTML = html;
+
+  if(stocksIO){ stocksIO.disconnect(); stocksIO = null; }
+  const sentinel = document.getElementById('stocksSentinel');
+  if(sentinel){
+    stocksIO = new IntersectionObserver((entries)=>{
+      if(entries[0].isIntersecting){
+        stocksRenderLimit += RENDER_BATCH;
+        renderStocksList();
+      }
+    }, { rootMargin: '600px' });
+    stocksIO.observe(sentinel);
+  }
+}
+
+/* ---------- STOCKS MULTI-SELECT (long-press, WhatsApp style) ---------- */
+
+function handleStockPointerDown(id){
+  longPressFired = false;
+  clearTimeout(longPressTimer);
+  longPressTimer = setTimeout(()=>{
+    longPressFired = true;
+    stockSelectionMode = true;
+    selectedStockIds = new Set([id]);
+    render();
+  }, 450);
+}
+
+function handleStockPointerUp(){
+  clearTimeout(longPressTimer);
+}
+
+function handleStockClick(id){
+  if(longPressFired){ longPressFired = false; return; }
+  if(stockSelectionMode){
+    toggleStockSelection(id);
+  }
+}
+
+function toggleStockSelection(id){
+  if(selectedStockIds.has(id)){ selectedStockIds.delete(id); }
+  else { selectedStockIds.add(id); }
+  if(selectedStockIds.size === 0){ stockSelectionMode = false; }
+  render();
+}
+
+function cancelStockSelection(){
+  stockSelectionMode = false;
+  selectedStockIds = new Set();
+  render();
+}
+
+function deleteSelectedStocks(){
+  if(selectedStockIds.size === 0) return;
+
+  const selected = stocks.filter(s=> selectedStockIds.has(s.id));
+  const blocked = selected.filter(s=> findActiveOrderForStock(s));
+
+  if(blocked.length > 0){
+    const names = blocked.map(s=> `"${s.name}"`).join(', ');
+    showAppAlert(
+      `${names} ${blocked.length === 1 ? 'is' : 'are'} in an active order. Remove ${blocked.length === 1 ? 'it' : 'them'} from the active order first, then it can be deleted.`,
+      "Can't delete — items are in an active order"
+    );
+    return;
+  }
+
+  const count = selectedStockIds.size;
+  showAppConfirm({
+    message: `Delete ${count} item${count === 1 ? '' : 's'}? This can't be undone.`,
+    confirmLabel: 'Delete',
+    danger: true,
+    onConfirm: ()=>{
+      stocks = stocks.filter(s=> !selectedStockIds.has(s.id));
+      stockSelectionMode = false;
+      selectedStockIds = new Set();
+      saveStocks();
+      render();
+      showToast(`${count} item${count === 1 ? '' : 's'} deleted`);
+    }
+  });
 }
 
 function submitStockForm(){
@@ -1493,7 +2018,7 @@ function submitStockForm(){
 
   const dupStock = otherStocks.find(s=> s.name.trim().toLowerCase() === name.toLowerCase());
   if(dupStock){
-    showToast(`A stock item named "${name}" already exists`);
+    showToast(`An item named "${name}" already exists`);
     return;
   }
 
@@ -1537,6 +2062,18 @@ function startEditStock(id){
 }
 
 function removeStock(id){
+  const item = stocks.find(s=> s.id === id);
+  if(!item) return;
+
+  const blockingOrder = findActiveOrderForStock(item);
+  if(blockingOrder){
+    showAppAlert(
+      `Remove "${item.name}" from the active order for ${blockingOrder.supplierName} first, then it can be deleted.`,
+      "Can't delete — item is in an active order"
+    );
+    return;
+  }
+
   stocks = stocks.filter(s=> s.id !== id);
   if(editingStockId === id) editingStockId = null;
   saveStocks();
@@ -1547,36 +2084,187 @@ function removeStock(id){
 
 function renderSuppliersDirectory(){
   const suppliers = getSuppliers();
-  let html = `
-    <div class="section-label">
-      <span class="left"><span class="num">05</span><h2>Suppliers (${suppliers.length})</h2></span>
-      <select class="sort-select" onchange="suppliersSort=this.value; render()">
-        <option value="az" ${suppliersSort==='az'?'selected':''}>A–Z</option>
-        <option value="recent" ${suppliersSort==='recent'?'selected':''}>Recently added</option>
-      </select>
-    </div>
-  `;
+  let html = '';
 
-  if(suppliers.length === 0){
-    html += `<div class="empty"><div class="glyph">·&nbsp;·&nbsp;·</div><p>No suppliers yet.<br>Add stock items from the Order tab — suppliers appear here automatically.</p></div>`;
-  } else {
-    suppliers.forEach(sup=>{
-      const key = supplierKey(sup.name, sup.phone);
-      html += `
-        <div class="supplier-card" onclick="viewSupplierStocks('${key}')">
-          <div class="top-row">
-            <div>
-              <div class="sname">${escapeHtml(sup.name)}</div>
-              <div class="sphone">${escapeHtml(sup.phone)}</div>
-            </div>
-            <div class="sitems">${sup.items.length} item${sup.items.length===1?'':'s'}</div>
-          </div>
+  if(supplierSelectionMode){
+    html += `
+      <div class="select-bar">
+        <div class="sb-left">
+          <button class="sb-cancel" title="Cancel selection" onclick="cancelSupplierSelection()">✕</button>
+          <span class="sb-count">${selectedSupplierKeys.size} selected</span>
         </div>
-      `;
-    });
+        <button class="sb-delete" title="Delete selected" onclick="deleteSelectedSuppliers()" ${selectedSupplierKeys.size === 0 ? 'disabled' : ''}>🗑</button>
+      </div>
+    `;
+  } else {
+    html += `
+      <div class="section-label">
+        <span class="left"><h2>Suppliers (${suppliers.length})</h2></span>
+        <select class="sort-select" onchange="suppliersSort=this.value; render()">
+          <option value="az" ${suppliersSort==='az'?'selected':''}>A–Z</option>
+          <option value="recent" ${suppliersSort==='recent'?'selected':''}>Recently added</option>
+        </select>
+      </div>
+    `;
   }
 
+  if(suppliers.length > 0){
+    html += `
+      <div class="search-wrap">
+        <span class="sicon">⌕</span>
+        <input id="f-supplier-search" placeholder="Search by name or phone" value="${escapeHtml(suppliersSearch)}" oninput="suppliersSearch=this.value; renderSuppliersList()">
+      </div>
+    `;
+  }
+
+  html += `<div id="suppliersListWrap"></div>`;
+
   mainEl.innerHTML = html;
+  renderSuppliersList();
+  positionSelectBar();
+}
+
+function getFilteredSuppliers(){
+  let list = getSuppliers();
+  if(suppliersSearch.trim()){
+    const q = suppliersSearch.trim().toLowerCase();
+    list = list.filter(sup=>
+      sup.name.toLowerCase().includes(q) ||
+      sup.phone.toLowerCase().includes(q)
+    );
+  }
+  return list;
+}
+
+function renderSuppliersList(){
+  const wrap = document.getElementById('suppliersListWrap');
+  if(!wrap) return;
+  const suppliers = getSuppliers();
+  const list = getFilteredSuppliers();
+
+  if(suppliers.length === 0){
+    wrap.innerHTML = `<div class="empty"><div class="glyph">·&nbsp;·&nbsp;·</div><p>No suppliers yet.<br>Add items from the Order tab — suppliers appear here automatically.</p></div>`;
+    return;
+  }
+  if(list.length === 0){
+    wrap.innerHTML = `<div class="empty"><div class="glyph">⌕</div><p>No suppliers match "${escapeHtml(suppliersSearch)}".</p></div>`;
+    return;
+  }
+
+  let html = '';
+  const visible = list.slice(0, suppliersRenderLimit);
+  visible.forEach(sup=>{
+    const key = supplierKey(sup.name, sup.phone);
+    const isSelected = supplierSelectionMode && selectedSupplierKeys.has(key);
+    html += `
+      <div class="supplier-card ${isSelected ? 'selected' : ''}"
+        onmousedown="handleSupplierPointerDown('${key}')"
+        onmouseup="handleSupplierPointerUp()"
+        onmouseleave="handleSupplierPointerUp()"
+        ontouchstart="handleSupplierPointerDown('${key}')"
+        ontouchend="handleSupplierPointerUp()"
+        ontouchmove="handleSupplierPointerUp()"
+        oncontextmenu="return false"
+        onclick="handleSupplierClick('${key}')">
+        <div class="top-row">
+          ${supplierSelectionMode ? `<div class="row-check ${isSelected ? 'checked' : ''}"></div>` : ''}
+          <div class="sinfo">
+            <div class="sname">${escapeHtml(sup.name)}</div>
+            <div class="sphone">${escapeHtml(sup.phone)}</div>
+          </div>
+          <div class="sitems">${sup.items.length} item${sup.items.length===1?'':'s'}</div>
+        </div>
+      </div>
+    `;
+  });
+
+  if(list.length > visible.length){
+    html += `<div id="suppliersSentinel" class="load-sentinel">Loading more suppliers…</div>`;
+  }
+
+  wrap.innerHTML = html;
+
+  if(suppliersIO){ suppliersIO.disconnect(); suppliersIO = null; }
+  const sentinel = document.getElementById('suppliersSentinel');
+  if(sentinel){
+    suppliersIO = new IntersectionObserver((entries)=>{
+      if(entries[0].isIntersecting){
+        suppliersRenderLimit += RENDER_BATCH;
+        renderSuppliersList();
+      }
+    }, { rootMargin: '600px' });
+    suppliersIO.observe(sentinel);
+  }
+}
+
+/* ---------- SUPPLIERS MULTI-SELECT (long-press, WhatsApp style) ---------- */
+
+function handleSupplierPointerDown(key){
+  longPressFired = false;
+  clearTimeout(longPressTimer);
+  longPressTimer = setTimeout(()=>{
+    longPressFired = true;
+    supplierSelectionMode = true;
+    selectedSupplierKeys = new Set([key]);
+    render();
+  }, 450);
+}
+
+function handleSupplierPointerUp(){
+  clearTimeout(longPressTimer);
+}
+
+function handleSupplierClick(key){
+  if(longPressFired){ longPressFired = false; return; }
+  if(supplierSelectionMode){
+    toggleSupplierSelection(key);
+  } else {
+    viewSupplierStocks(key);
+  }
+}
+
+function toggleSupplierSelection(key){
+  if(selectedSupplierKeys.has(key)){ selectedSupplierKeys.delete(key); }
+  else { selectedSupplierKeys.add(key); }
+  if(selectedSupplierKeys.size === 0){ supplierSelectionMode = false; }
+  render();
+}
+
+function cancelSupplierSelection(){
+  supplierSelectionMode = false;
+  selectedSupplierKeys = new Set();
+  render();
+}
+
+function deleteSelectedSuppliers(){
+  if(selectedSupplierKeys.size === 0) return;
+
+  const suppliers = getSuppliers().filter(sup=> selectedSupplierKeys.has(supplierKey(sup.name, sup.phone)));
+  const blocked = suppliers.filter(sup=> sup.items.length > 0);
+
+  if(blocked.length > 0){
+    const names = blocked.map(sup=> `"${sup.name}"`).join(', ');
+    showAppAlert(
+      `${names} ${blocked.length === 1 ? 'has' : 'have'} items linked to ${blocked.length === 1 ? 'it' : 'them'}. Delete those items from the Items tab first, then the supplier can be deleted.`,
+      "Can't delete — supplier has linked items"
+    );
+    return;
+  }
+
+  const count = selectedSupplierKeys.size;
+  showAppConfirm({
+    message: `Delete ${count} supplier${count === 1 ? '' : 's'}? This can't be undone.`,
+    confirmLabel: 'Delete',
+    danger: true,
+    onConfirm: ()=>{
+      stocks = stocks.filter(s=> !selectedSupplierKeys.has(supplierKey(s.supplierName, s.supplierPhone)));
+      supplierSelectionMode = false;
+      selectedSupplierKeys = new Set();
+      saveStocks();
+      render();
+      showToast(`${count} supplier${count === 1 ? '' : 's'} deleted`);
+    }
+  });
 }
 
 function viewSupplierStocks(key){
@@ -1602,9 +2290,9 @@ function renderSupplierStockList(){
         <div class="ph">${escapeHtml(sup.phone)}</div>
       </div>
     </div>
-    <div class="section-label"><span class="left"><span class="num">·</span><h2>Stock items (${sup.items.length})</h2></span></div>
+    <div class="section-label"><span class="left"><span class="num">·</span><h2>Items (${sup.items.length})</h2></span></div>
     <p class="section-sub">Tap an item to add a quantity to your order.</p>
-    <div class="card">
+    <div class="list-card">
   `;
 
   sup.items.forEach((item, i)=>{
@@ -1626,6 +2314,14 @@ function renderSupplierStockList(){
 function openAddModal(itemId){
   const item = stocks.find(s=> s.id === itemId);
   if(!item) return;
+
+  const existingOrder = findActiveOrderForStock(item);
+  if(existingOrder){
+    const existingLine = existingOrder.items.find(li=> li.name === item.name && li.unit === item.unit);
+    showDuplicateItemModal(existingOrder, item, existingLine);
+    return;
+  }
+
   modalItemId = itemId;
   document.getElementById('modalTitle').textContent = item.name;
   document.getElementById('modalUnit').textContent = 'unit: ' + item.unit;
@@ -1652,6 +2348,16 @@ function confirmAddToOrder(){
 
   const key = supplierKey(item.supplierName, item.supplierPhone);
   let order = orderHistory.find(o=> o.supplierKey === key && o.status === 'active');
+
+  if(order){
+    const existingLine = order.items.find(li=> li.name === item.name && li.unit === item.unit);
+    if(existingLine){
+      closeAddModal();
+      showDuplicateItemModal(order, item, existingLine, qty);
+      return;
+    }
+  }
+
   if(!order){
     order = {
       id: uid(),
@@ -1665,9 +2371,7 @@ function confirmAddToOrder(){
     orderHistory.push(order);
   }
 
-  const existingLine = order.items.find(li=> li.name === item.name && li.unit === item.unit);
-  if(existingLine){ existingLine.qty = qty; } else { order.items.push({ name: item.name, unit: item.unit, qty }); }
-
+  order.items.push({ name: item.name, unit: item.unit, qty });
   saveOrderHistory();
   closeAddModal();
   render();
