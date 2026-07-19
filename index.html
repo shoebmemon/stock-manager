@@ -1,0 +1,1688 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>Stockline — Order Book</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1B2430;
+    --ink-soft:#2C3849;
+    --paper:#F6F4EC;
+    --paper-raised:#FFFFFF;
+    --line:#D8D2C0;
+    --slate:#66707D;
+    --amber:#E8A33D;
+    --amber-deep:#C6822A;
+    --whatsapp:#2E9E5B;
+    --danger:#B3492F;
+    --radius:10px;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'IBM Plex Sans', sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .app{
+    max-width:520px;
+    margin:0 auto;
+    min-height:100vh;
+    background:var(--paper);
+    display:flex;
+    flex-direction:column;
+    position:relative;
+  }
+
+  header.top{
+    background:var(--ink);
+    color:var(--paper);
+    padding:20px 20px 18px 20px;
+    position:sticky;
+    top:0;
+    z-index:20;
+  }
+  .brand{
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+  }
+  .brand h1{
+    font-family:'Space Grotesk', sans-serif;
+    font-weight:700;
+    font-size:22px;
+    margin:0;
+    letter-spacing:0.2px;
+  }
+  .brand .mark{ color:var(--amber); }
+  .brand .count{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    color:#9AA5B1;
+  }
+
+  main{ flex:1; padding:18px 16px 96px 16px; }
+
+  /* Bottom nav */
+  nav.bottom-tabs{
+    position:fixed;
+    left:50%;
+    bottom:0;
+    transform:translateX(-50%);
+    width:100%;
+    max-width:520px;
+    display:flex;
+    background:var(--ink);
+    border-top:1px solid #303B4B;
+    padding:6px 4px calc(6px + env(safe-area-inset-bottom, 0px)) 4px;
+    z-index:30;
+  }
+  nav.bottom-tabs button{
+    flex:1;
+    background:transparent;
+    border:none;
+    color:#8890A0;
+    cursor:pointer;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:3px;
+    padding:8px 2px 6px 2px;
+    position:relative;
+  }
+  nav.bottom-tabs button .bn-num{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:9.5px;
+    letter-spacing:0.5px;
+  }
+  nav.bottom-tabs button .bn-label{
+    font-family:'Space Grotesk', sans-serif;
+    font-weight:600;
+    font-size:10.5px;
+    letter-spacing:0.2px;
+    text-transform:uppercase;
+  }
+  nav.bottom-tabs button.active{ color:var(--paper); }
+  nav.bottom-tabs button.active .bn-num{ color:var(--amber); }
+  nav.bottom-tabs button.active::after{
+    content:'';
+    position:absolute;
+    top:1px;
+    width:16px;
+    height:2px;
+    background:var(--amber);
+    border-radius:2px;
+  }
+  nav.bottom-tabs button .bn-badge{
+    position:absolute;
+    top:2px;
+    right:14%;
+    background:var(--amber);
+    color:var(--ink);
+    font-family:'IBM Plex Mono', monospace;
+    font-size:9px;
+    font-weight:600;
+    border-radius:8px;
+    padding:1px 5px;
+    line-height:1.3;
+  }
+
+  .section-label{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    margin:4px 0 14px 0;
+  }
+  .section-label .left{ display:flex; align-items:center; gap:10px; }
+  .section-label .num{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    color:var(--slate);
+    border:1px solid var(--line);
+    border-radius:4px;
+    padding:2px 6px;
+  }
+  .section-label h2{
+    font-family:'Space Grotesk', sans-serif;
+    font-size:15px;
+    margin:0;
+    font-weight:600;
+    color:var(--ink-soft);
+  }
+  .section-sub{
+    font-size:12.5px;
+    color:var(--slate);
+    margin:-8px 0 14px 0;
+  }
+  .sort-select{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    padding:5px 7px;
+    border:1px solid var(--line);
+    border-radius:6px;
+    background:var(--paper-raised);
+    color:var(--ink-soft);
+    width:auto;
+  }
+
+  .card{
+    background:var(--paper-raised);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:16px;
+    margin-bottom:14px;
+  }
+
+  label{
+    display:block;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:10.5px;
+    text-transform:uppercase;
+    letter-spacing:0.6px;
+    color:var(--slate);
+    margin:12px 0 5px 0;
+  }
+  label:first-child{margin-top:0;}
+  input, select{
+    width:100%;
+    padding:11px 12px;
+    border:1px solid var(--line);
+    border-radius:7px;
+    background:var(--paper);
+    font-family:'IBM Plex Sans', sans-serif;
+    font-size:14.5px;
+    color:var(--ink);
+  }
+  input:focus, select:focus{
+    outline:2px solid var(--amber);
+    outline-offset:1px;
+    border-color:var(--amber);
+  }
+  .row2{ display:flex; gap:10px; }
+  .row2 > div{ flex:1; }
+
+  .search-wrap{ position:relative; margin-bottom:14px; }
+  .search-wrap input{ padding-left:34px; }
+  .search-wrap .sicon{
+    position:absolute;
+    left:12px; top:50%;
+    transform:translateY(-50%);
+    color:var(--slate);
+    font-size:13px;
+    font-family:'IBM Plex Mono', monospace;
+  }
+  .search-wrap.has-add-btn input{ padding-right:42px; }
+  .search-wrap .add-icon-btn{
+    position:absolute;
+    right:6px; top:50%;
+    transform:translateY(-50%);
+    background:transparent;
+    border:none;
+    color:var(--slate);
+    font-size:20px;
+    line-height:1;
+    cursor:pointer;
+    width:32px; height:32px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    border-radius:6px;
+  }
+  .search-wrap .add-icon-btn:hover{ background:var(--paper); color:var(--ink); }
+
+  .search-results{
+    border:1px solid var(--line);
+    border-radius:7px;
+    background:var(--paper-raised);
+    margin:-6px 0 14px 0;
+    max-height:220px;
+    overflow-y:auto;
+  }
+  .sr-item{
+    padding:10px 12px;
+    border-bottom:1px dashed var(--line);
+    cursor:pointer;
+  }
+  .sr-item:last-child{ border-bottom:none; }
+  .sr-item:hover{ background:var(--paper); }
+  .sr-name{ font-weight:600; font-size:13.5px; color:var(--ink); }
+  .sr-meta{ font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--slate); margin-top:2px; }
+  .sr-empty{ padding:12px; font-size:12.5px; color:var(--slate); }
+
+  button.primary{
+    width:100%;
+    margin-top:16px;
+    background:var(--ink);
+    color:var(--paper);
+    border:none;
+    border-radius:7px;
+    padding:13px;
+    font-family:'Space Grotesk', sans-serif;
+    font-weight:600;
+    font-size:14px;
+    cursor:pointer;
+    letter-spacing:0.2px;
+  }
+  button.primary:hover{ background:var(--ink-soft); }
+  button.primary:disabled{ opacity:.4; cursor:not-allowed; }
+  button.ghost{
+    width:100%;
+    margin-top:8px;
+    background:transparent;
+    color:var(--slate);
+    border:1px solid var(--line);
+    border-radius:7px;
+    padding:11px;
+    font-family:'Space Grotesk', sans-serif;
+    font-weight:600;
+    font-size:13px;
+    cursor:pointer;
+  }
+  button.ghost:hover{ border-color:var(--slate); color:var(--ink); }
+  button.ghost.small{ width:auto; margin-top:0; padding:8px 12px; font-size:12px; }
+  button.ghost.complete{ border-color:var(--whatsapp); color:var(--whatsapp); }
+  button.ghost.complete:hover{ background:#EAF6EF; }
+
+  .ledger-row{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:13px 4px;
+    border-bottom:1px dashed var(--line);
+  }
+  .ledger-row:last-child{ border-bottom:none; }
+  .ledger-row .idx{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    color:var(--slate);
+    width:24px;
+    flex-shrink:0;
+  }
+  .ledger-row .info{ flex:1; min-width:0; }
+  .ledger-row .name{ font-weight:600; font-size:14.5px; color:var(--ink); }
+  .ledger-row .meta{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11.5px;
+    color:var(--slate);
+    margin-top:2px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .ledger-row .unit-pill{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    background:var(--paper);
+    border:1px solid var(--line);
+    border-radius:5px;
+    padding:3px 8px;
+    color:var(--ink-soft);
+    flex-shrink:0;
+  }
+  .icon-btn{
+    background:none;
+    border:none;
+    color:var(--slate);
+    cursor:pointer;
+    font-size:14px;
+    padding:4px 5px;
+    flex-shrink:0;
+  }
+  .icon-btn:hover{ color:var(--ink); }
+  .icon-btn.danger:hover{ color:var(--danger); }
+
+  .supplier-card{
+    background:var(--paper-raised);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:16px;
+    margin-bottom:12px;
+    cursor:pointer;
+    transition:border-color .15s ease;
+  }
+  .supplier-card:hover{ border-color:var(--amber-deep); }
+  .supplier-card .top-row{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-start;
+  }
+  .supplier-card .sname{ font-family:'Space Grotesk', sans-serif; font-weight:600; font-size:15.5px; }
+  .supplier-card .sphone{ font-family:'IBM Plex Mono', monospace; font-size:12px; color:var(--slate); margin-top:3px; }
+  .supplier-card .sitems{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    color:var(--amber-deep);
+    background:#FBF1DF;
+    border-radius:5px;
+    padding:4px 8px;
+    white-space:nowrap;
+  }
+
+  .empty{ text-align:center; padding:50px 20px; color:var(--slate); }
+  .empty .glyph{ font-family:'IBM Plex Mono', monospace; font-size:26px; color:var(--line); margin-bottom:10px; }
+  .empty p{ font-size:13.5px; line-height:1.5; margin:0; }
+
+  .review-header{ display:flex; align-items:center; gap:10px; margin-bottom:16px; }
+  .back-btn{
+    background:var(--paper-raised);
+    border:1px solid var(--line);
+    border-radius:7px;
+    width:34px; height:34px;
+    font-size:16px;
+    cursor:pointer;
+    color:var(--ink);
+    flex-shrink:0;
+  }
+  .review-header .who h2{ margin:0; font-family:'Space Grotesk', sans-serif; font-size:17px; }
+  .review-header .who .ph{ font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--slate); }
+  .qty-row{ display:flex; align-items:center; gap:12px; padding:12px 4px; border-bottom:1px dashed var(--line); }
+  .qty-row:last-child{ border-bottom:none; }
+  .qty-row .qinfo{ flex:1; min-width:0; }
+  .qty-row .qname{ font-weight:600; font-size:14px; }
+  .qty-row .qunit{ font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--slate); }
+  .qty-row input.qty{ width:64px; text-align:center; padding:9px 4px; font-family:'IBM Plex Mono', monospace; font-weight:600; }
+  .send-btn{
+    width:100%;
+    margin-top:16px;
+    background:var(--whatsapp);
+    color:#fff;
+    border:none;
+    border-radius:7px;
+    padding:14px;
+    font-family:'Space Grotesk', sans-serif;
+    font-weight:600;
+    font-size:14.5px;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+  }
+  .send-btn:hover{ background:#268049; }
+  .send-btn:disabled{ opacity:.4; cursor:not-allowed; }
+
+  .order-card{
+    background:var(--paper-raised);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:11px 14px;
+    margin-bottom:10px;
+    position:relative;
+    transition:border-color .15s ease, background .15s ease, padding-left .15s ease;
+  }
+  .order-card.clickable{ cursor:pointer; }
+  .order-card.clickable:hover{ border-color:var(--amber-deep); }
+  .order-card.selecting{ padding-left:42px; }
+  .order-card.selected{ background:#FBF1DF; border-color:var(--amber-deep); }
+  .order-card .htop{ display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .order-card .hname{ font-family:'Space Grotesk', sans-serif; font-weight:600; font-size:14.5px; margin-top:6px; }
+  .order-card .hphone{ font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--slate); margin-top:4px; }
+  .order-card .hdate{ font-family:'IBM Plex Mono', monospace; font-size:10.5px; color:var(--slate); white-space:nowrap; }
+  .select-check{
+    position:absolute;
+    left:12px; top:50%;
+    transform:translateY(-50%);
+    width:21px; height:21px;
+    border-radius:50%;
+    border:2px solid var(--line);
+    background:var(--paper-raised);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .select-check.checked{
+    border-color:var(--whatsapp);
+    background:var(--whatsapp);
+  }
+  .select-check.checked::after{
+    content:'✓';
+    color:#fff;
+    font-size:12px;
+    font-weight:700;
+    line-height:1;
+  }
+  .select-bar{
+    position:sticky;
+    top:0;
+    z-index:15;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    margin:-18px -16px 14px -16px;
+    padding:14px 16px;
+    background:var(--paper);
+    border-bottom:1px solid var(--line);
+    box-shadow:0 4px 10px rgba(27,36,48,.05);
+  }
+  .select-bar .sb-left{ display:flex; align-items:center; gap:10px; }
+  .select-bar .sb-cancel{
+    background:none; border:none; color:var(--ink-soft); font-size:19px; cursor:pointer;
+    padding:2px 4px; line-height:1;
+  }
+  .select-bar .sb-cancel:hover{ color:var(--ink); }
+  .select-bar .sb-count{
+    font-family:'Space Grotesk', sans-serif; font-weight:600; font-size:14px; color:var(--ink);
+  }
+  .select-bar .sb-delete{
+    background:var(--danger);
+    color:#fff;
+    border:none;
+    border-radius:7px;
+    padding:8px 14px;
+    font-family:'Space Grotesk', sans-serif;
+    font-weight:600;
+    font-size:12.5px;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:6px;
+    flex-shrink:0;
+  }
+  .select-bar .sb-delete:disabled{ opacity:.4; cursor:not-allowed; }
+  .status-pill{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:10px;
+    text-transform:uppercase;
+    letter-spacing:0.4px;
+    border-radius:5px;
+    padding:3px 7px;
+    display:inline-block;
+  }
+  .status-pill.active{ background:#FBF1DF; color:var(--amber-deep); }
+  .status-pill.completed{ background:#E8F5EC; color:var(--whatsapp); }
+
+
+  .modal-overlay{
+    position:fixed;
+    inset:0;
+    background:rgba(27,36,48,.5);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    z-index:100;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity .15s ease;
+    padding:20px;
+  }
+  .modal-overlay.show{ opacity:1; pointer-events:auto; }
+  .modal-card{
+    background:var(--paper-raised);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:20px;
+    width:100%;
+    max-width:380px;
+  }
+  .modal-title{ font-family:'Space Grotesk', sans-serif; font-weight:600; font-size:16px; }
+  .modal-unit{ font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--slate); margin-top:2px; }
+  .modal-card input.qty-input{
+    width:100%;
+    text-align:center;
+    padding:12px;
+    font-family:'IBM Plex Mono', monospace;
+    font-weight:600;
+    font-size:16px;
+    margin-top:12px;
+  }
+  .modal-actions{ display:flex; gap:10px; margin-top:16px; }
+  .modal-actions button{ flex:1; margin-top:0; }
+
+  .toast{
+    position:fixed;
+    bottom:78px;
+    left:50%;
+    transform:translateX(-50%) translateY(20px);
+    background:var(--ink);
+    color:var(--paper);
+    padding:11px 18px;
+    border-radius:8px;
+    font-size:13px;
+    font-family:'IBM Plex Sans', sans-serif;
+    opacity:0;
+    transition:opacity .2s ease, transform .2s ease;
+    pointer-events:none;
+    z-index:50;
+    max-width:80%;
+    text-align:center;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">
+      <h1>Stock<span class="mark">line</span></h1>
+      <span class="count" id="headerCount"></span>
+    </div>
+  </header>
+
+  <main id="main"></main>
+
+  <nav class="bottom-tabs">
+    <button id="tabOrderBtn" onclick="switchTab('order')">
+      <span class="bn-num">01</span>
+      <span class="bn-label">Order</span>
+    </button>
+    <button id="tabActiveBtn" onclick="switchTab('active')">
+      <span class="bn-num">02</span>
+      <span class="bn-label">Active</span>
+      <span class="bn-badge" id="activeBadge" style="display:none;"></span>
+    </button>
+    <button id="tabCompletedBtn" onclick="switchTab('completed')">
+      <span class="bn-num">03</span>
+      <span class="bn-label">Completed</span>
+    </button>
+    <button id="tabStocksBtn" onclick="switchTab('stocks')">
+      <span class="bn-num">04</span>
+      <span class="bn-label">Stocks</span>
+    </button>
+    <button id="tabSuppliersBtn" onclick="switchTab('suppliers')">
+      <span class="bn-num">05</span>
+      <span class="bn-label">Suppliers</span>
+    </button>
+  </nav>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this) closeAddModal()">
+  <div class="modal-card">
+    <div class="modal-title" id="modalTitle"></div>
+    <div class="modal-unit" id="modalUnit"></div>
+    <input class="qty-input" id="modalQtyInput" type="number" min="0" inputmode="numeric" placeholder="0">
+    <div class="modal-actions">
+      <button class="ghost" onclick="closeAddModal()">Cancel</button>
+      <button class="primary" onclick="confirmAddToOrder()">＋ Add to order</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let stocks = [];
+let orderHistory = [];
+let currentTab = 'order';
+let reviewingSupplierKey = null;
+let editingStockId = null;
+let stocksSearch = '';
+let stocksSort = 'az';
+let suppliersSort = 'az';
+let reviewQty = {};
+let reviewSearch = '';
+let loaded = false;
+let supplierStocksViewKey = null;
+let modalItemId = null;
+let addingNewStock = false;
+let orderSearchQuery = '';
+let orderSelectedItemId = null;
+let orderQty = '';
+let viewingOrderId = null;
+let orderDetailSearch = '';
+let selectionMode = false;
+let selectionTab = null;
+let selectedOrderIds = new Set();
+let longPressTimer = null;
+let longPressFired = false;
+
+const mainEl = document.getElementById('main');
+const toastEl = document.getElementById('toast');
+const TABS = ['order','active','completed','stocks','suppliers'];
+
+function showToast(msg){
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  setTimeout(()=> toastEl.classList.remove('show'), 2200);
+}
+
+function uid(){
+  return 's' + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+}
+
+async function loadData(){
+  try{
+    const r = await window.storage.get('stocks', false);
+    stocks = r ? JSON.parse(r.value) : [];
+  }catch(e){ stocks = []; }
+  try{
+    const r3 = await window.storage.get('order-history', false);
+    orderHistory = r3 ? JSON.parse(r3.value) : [];
+    // Migrate older entries logged before Active/Completed existed:
+    // treat them as already completed so they don't clutter Active.
+    let migrated = false;
+    orderHistory.forEach(o=>{ if(!o.status){ o.status = 'completed'; migrated = true; } });
+    orderHistory.forEach(o=>{ if(o.status === 'completed' && !o.sentDate){ o.sentDate = o.date; migrated = true; } });
+    if(migrated) saveOrderHistory();
+  }catch(e){ orderHistory = []; }
+  loaded = true;
+  render();
+}
+
+async function saveStocks(){
+  try{ await window.storage.set('stocks', JSON.stringify(stocks), false); }
+  catch(e){ showToast('Could not save — try again'); }
+}
+
+async function saveOrderHistory(){
+  try{ await window.storage.set('order-history', JSON.stringify(orderHistory), false); }
+  catch(e){ showToast('Could not save order'); }
+}
+
+function switchTab(tab){
+  currentTab = tab;
+  reviewingSupplierKey = null;
+  editingStockId = null;
+  viewingOrderId = null;
+  selectionMode = false;
+  selectionTab = null;
+  selectedOrderIds = new Set();
+  TABS.forEach(t=>{
+    document.getElementById('tab' + capitalize(t) + 'Btn').classList.toggle('active', t === tab);
+  });
+  render();
+}
+
+function capitalize(s){ return s.charAt(0).toUpperCase() + s.slice(1); }
+
+function formatDateTime(iso){
+  const d = new Date(iso);
+  return d.toLocaleDateString(undefined, { day:'numeric', month:'short' }) +
+    ' · ' + d.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit' });
+}
+
+function cleanPhone(p){
+  return (p || '').replace(/[^\d+]/g,'').replace(/^\+/, '');
+}
+
+function supplierKey(name, phone){
+  return name.trim().toLowerCase() + '|' + cleanPhone(phone);
+}
+
+function getSuppliersFrom(list){
+  const map = new Map();
+  list.forEach(s=>{
+    const key = supplierKey(s.supplierName, s.supplierPhone);
+    if(!map.has(key)){
+      map.set(key, { name: s.supplierName, phone: s.supplierPhone, items: [] });
+    }
+    map.get(key).items.push(s);
+  });
+  return Array.from(map.values());
+}
+
+function getSuppliers(){
+  let list = getSuppliersFrom(stocks);
+  if(suppliersSort === 'az'){
+    list.sort((a,b)=> a.name.localeCompare(b.name));
+  }
+  return list;
+}
+
+function render(){
+  document.getElementById('headerCount').textContent =
+    stocks.length ? stocks.length + ' item' + (stocks.length===1?'':'s') + ' on file' : '';
+
+  const activeCount = orderHistory.filter(o=> o.status === 'active').length;
+  const badge = document.getElementById('activeBadge');
+  if(activeCount > 0){ badge.style.display = 'inline-block'; badge.textContent = activeCount; }
+  else { badge.style.display = 'none'; }
+
+  if(!loaded){
+    mainEl.innerHTML = '<div class="empty"><p>Loading your order book…</p></div>';
+    return;
+  }
+
+  if(currentTab === 'order'){
+    if(reviewingSupplierKey){ renderReview(); } else { renderOrderPicker(); }
+  } else if(currentTab === 'active'){
+    if(viewingOrderId){ renderOrderDetail(); } else { renderOrdersList('active'); }
+  } else if(currentTab === 'completed'){
+    if(viewingOrderId){ renderOrderDetail(); } else { renderOrdersList('completed'); }
+  } else if(currentTab === 'stocks'){
+    renderStocks();
+  } else {
+    if(supplierStocksViewKey){ renderSupplierStockList(); } else { renderSuppliersDirectory(); }
+  }
+}
+
+/* ---------- ORDER TAB (supplier picker + review) ---------- */
+
+function renderOrderPicker(){
+  if(editingStockId || addingNewStock){ renderStockForm(); return; }
+
+  let html = `
+    <div class="section-label"><span class="left"><span class="num">01</span><h2>Add to order</h2></span></div>
+    <div class="card">
+      <label for="f-order-search">Search & select stock item</label>
+      <div class="search-wrap has-add-btn">
+        <span class="sicon">⌕</span>
+        <input id="f-order-search" placeholder="Type item name to filter…" autocomplete="off"
+          value="${escapeHtml(orderSearchQuery)}"
+          oninput="orderSearchQuery=this.value; orderSelectedItemId=null; renderOrderSearchResults()">
+        <button class="add-icon-btn" title="Add new stock item" onclick="openAddStockPage()">＋</button>
+      </div>
+      <div id="orderSearchResultsWrap"></div>
+
+      <label for="f-order-qty">Quantity to order</label>
+      <input id="f-order-qty" type="number" min="0" inputmode="numeric" placeholder="0"
+        value="${escapeHtml(orderQty)}" oninput="orderQty=this.value">
+
+      <button class="send-btn" id="orderAddBtn" onclick="addSearchedItemToOrder()" ${orderSelectedItemId ? '' : 'disabled'}>＋ Add to order</button>
+    </div>
+  `;
+
+  mainEl.innerHTML = html;
+  renderOrderSearchResults();
+}
+
+function renderOrderSearchResults(){
+  const wrap = document.getElementById('orderSearchResultsWrap');
+  if(!wrap) return;
+
+  const q = orderSearchQuery.trim().toLowerCase();
+  if(!q || orderSelectedItemId){ wrap.innerHTML = ''; return; }
+
+  const matches = stocks.filter(s=> s.name.toLowerCase().includes(q)).slice(0, 8);
+
+  if(matches.length === 0){
+    wrap.innerHTML = `<div class="search-results"><div class="sr-empty">No matching stock items — tap + to add one.</div></div>`;
+    return;
+  }
+
+  wrap.innerHTML = `<div class="search-results">` + matches.map(s=> `
+    <div class="sr-item" onclick="selectOrderItem('${s.id}')">
+      <div class="sr-name">${escapeHtml(s.name)}</div>
+      <div class="sr-meta">${escapeHtml(s.supplierName)} · ${escapeHtml(s.unit)}</div>
+    </div>
+  `).join('') + `</div>`;
+}
+
+function selectOrderItem(id){
+  const item = stocks.find(s=> s.id === id);
+  if(!item) return;
+  orderSelectedItemId = id;
+  orderSearchQuery = item.name;
+
+  const searchInput = document.getElementById('f-order-search');
+  if(searchInput) searchInput.value = item.name;
+  const resultsWrap = document.getElementById('orderSearchResultsWrap');
+  if(resultsWrap) resultsWrap.innerHTML = '';
+  const addBtn = document.getElementById('orderAddBtn');
+  if(addBtn) addBtn.removeAttribute('disabled');
+
+  const qtyInput = document.getElementById('f-order-qty');
+  if(qtyInput) qtyInput.focus();
+}
+
+function addSearchedItemToOrder(){
+  const item = stocks.find(s=> s.id === orderSelectedItemId);
+  if(!item){ showToast('Search and select a stock item first'); return; }
+
+  const qty = parseFloat(orderQty);
+  if(!qty || qty <= 0){ showToast('Enter a valid quantity'); return; }
+
+  const key = supplierKey(item.supplierName, item.supplierPhone);
+  let order = orderHistory.find(o=> o.supplierKey === key && o.status === 'active');
+  if(!order){
+    order = {
+      id: uid(),
+      supplierKey: key,
+      supplierName: item.supplierName,
+      supplierPhone: item.supplierPhone,
+      date: new Date().toISOString(),
+      status: 'active',
+      items: []
+    };
+    orderHistory.push(order);
+  }
+
+  const existingLine = order.items.find(li=> li.name === item.name && li.unit === item.unit);
+  if(existingLine){ existingLine.qty = qty; } else { order.items.push({ name: item.name, unit: item.unit, qty }); }
+
+  saveOrderHistory();
+
+  orderSearchQuery = '';
+  orderSelectedItemId = null;
+  orderQty = '';
+  render();
+  showToast('Added to order — view it in Active');
+}
+
+function openAddStockPage(){
+  addingNewStock = true;
+  editingStockId = null;
+  render();
+}
+
+function closeStockForm(){
+  addingNewStock = false;
+  editingStockId = null;
+  render();
+}
+
+function renderStockForm(){
+  const editing = editingStockId ? stocks.find(s=> s.id === editingStockId) : null;
+
+  let html = `
+    <div class="review-header">
+      <button class="back-btn" onclick="closeStockForm()">←</button>
+      <div class="who"><h2>${editing ? 'Edit stock item' : 'Add stock item'}</h2></div>
+    </div>
+    <p class="section-sub" style="margin:-2px 0 12px 0;">⚠ Stock names must be unique, and a supplier name must always use the same phone number.</p>
+    <div class="card">
+      <label for="f-name">Stock name</label>
+      <input id="f-name" placeholder="e.g. Basmati rice, 25kg bag" autocomplete="off" value="${editing ? escapeHtml(editing.name) : ''}">
+
+      <label for="f-unit">Unit</label>
+      <input id="f-unit" placeholder="e.g. bag, kg" autocomplete="off" maxlength="4" value="${editing ? escapeHtml(editing.unit) : ''}">
+
+      <label for="f-sname">Supplier name</label>
+      <input id="f-sname" placeholder="e.g. Cash & Carry Ltd" autocomplete="off"
+        value="${editing ? escapeHtml(editing.supplierName) : ''}"
+        oninput="renderSupplierSuggestions(this.value)"
+        onfocus="renderSupplierSuggestions(this.value)"
+        onblur="setTimeout(()=>{ const w=document.getElementById('supplierSuggestWrap'); if(w) w.innerHTML=''; }, 150)">
+      <div id="supplierSuggestWrap"></div>
+
+      <label for="f-sphone">Supplier phone (WhatsApp number)</label>
+      <input id="f-sphone" placeholder="e.g. +447700900123" autocomplete="off" inputmode="tel"
+        value="${editing ? escapeHtml(editing.supplierPhone) : ''}"
+        oninput="sanitizePhoneField(this)">
+
+      <button class="primary" onclick="submitStockForm()">${editing ? 'Save changes' : 'Add stock item'}</button>
+      <button class="ghost" onclick="closeStockForm()">Cancel</button>
+    </div>
+  `;
+
+  mainEl.innerHTML = html;
+}
+
+function sanitizePhoneField(input){
+  const hasPlus = input.value.trim().startsWith('+');
+  const digits = input.value.replace(/[^\d]/g, '');
+  input.value = (hasPlus ? '+' : '') + digits;
+}
+
+let stockFormSupplierSuggestions = [];
+
+function renderSupplierSuggestions(query){
+  const wrap = document.getElementById('supplierSuggestWrap');
+  if(!wrap) return;
+
+  const q = (query || '').trim().toLowerCase();
+  if(!q){ wrap.innerHTML = ''; stockFormSupplierSuggestions = []; return; }
+
+  stockFormSupplierSuggestions = getSuppliers().filter(s=> s.name.toLowerCase().includes(q));
+
+  if(stockFormSupplierSuggestions.length === 0){ wrap.innerHTML = ''; return; }
+
+  wrap.innerHTML = `<div class="search-results">` + stockFormSupplierSuggestions.map((s, i)=> `
+    <div class="sr-item" onmousedown="selectSupplierSuggestion(${i})">
+      <div class="sr-name">${escapeHtml(s.name)}</div>
+      <div class="sr-meta">${escapeHtml(s.phone)} · ${s.items.length} item${s.items.length===1?'':'s'} on file</div>
+    </div>
+  `).join('') + `</div>`;
+}
+
+function selectSupplierSuggestion(i){
+  const sup = stockFormSupplierSuggestions[i];
+  if(!sup) return;
+  const snameInput = document.getElementById('f-sname');
+  const sphoneInput = document.getElementById('f-sphone');
+  if(snameInput) snameInput.value = sup.name;
+  if(sphoneInput) sphoneInput.value = sup.phone;
+  const wrap = document.getElementById('supplierSuggestWrap');
+  if(wrap) wrap.innerHTML = '';
+}
+
+function openReview(key){
+  reviewingSupplierKey = key;
+  reviewQty = {};
+  reviewSearch = '';
+  currentTab = 'order';
+  TABS.forEach(t=> document.getElementById('tab' + capitalize(t) + 'Btn').classList.toggle('active', t === 'order'));
+  render();
+}
+
+function closeReview(){
+  reviewingSupplierKey = null;
+  render();
+}
+
+function findLastOrderForSupplier(key){
+  for(let i = orderHistory.length - 1; i >= 0; i--){
+    if(orderHistory[i].supplierKey === key) return orderHistory[i];
+  }
+  return null;
+}
+
+function prefillQtyFromEntry(entry, supplierItems){
+  reviewQty = {};
+  reviewSearch = '';
+  entry.items.forEach(li=>{
+    const match = supplierItems.find(it=> it.name === li.name && it.unit === li.unit);
+    if(match) reviewQty[match.id] = String(li.qty);
+  });
+}
+
+function repeatLastOrder(key){
+  const last = findLastOrderForSupplier(key);
+  if(!last){ showToast('No previous order found for this supplier'); return; }
+  const sup = getSuppliers().find(s=> supplierKey(s.name, s.phone) === key);
+  prefillQtyFromEntry(last, sup.items);
+  renderReview();
+  showToast('Loaded quantities from last order');
+}
+
+function reorderFromEntry(orderId){
+  const entry = orderHistory.find(o=> o.id === orderId);
+  if(!entry) return;
+  const sup = getSuppliers().find(s=> supplierKey(s.name, s.phone) === entry.supplierKey);
+  if(!sup){ showToast('That supplier no longer has stock items on file'); return; }
+  openReview(entry.supplierKey);
+  prefillQtyFromEntry(entry, sup.items);
+  renderReview();
+  showToast('Loaded quantities — review and send');
+}
+
+function renderReview(){
+  const suppliers = getSuppliers();
+  const sup = suppliers.find(s=> supplierKey(s.name, s.phone) === reviewingSupplierKey);
+  if(!sup){ reviewingSupplierKey = null; render(); return; }
+  const key = supplierKey(sup.name, sup.phone);
+  const hasHistory = !!findLastOrderForSupplier(key);
+
+  let html = `
+    <div class="review-header">
+      <button class="back-btn" onclick="closeReview()">←</button>
+      <div class="who">
+        <h2>${escapeHtml(sup.name)}</h2>
+        <div class="ph">${escapeHtml(sup.phone)}</div>
+      </div>
+    </div>
+    <div class="section-label"><span class="left"><span class="num">·</span><h2>Search stock item</h2></span></div>
+    <div class="card">
+      <label for="f-review-search">Stock name</label>
+      <input id="f-review-search" placeholder="e.g. Basmati rice, 25kg bag" autocomplete="off"
+        value="${escapeHtml(reviewSearch)}" oninput="reviewSearch=this.value; renderReviewItems()">
+    </div>
+    <div class="section-label"><span class="left"><span class="num">·</span><h2>Set quantities to order</h2></span></div>
+    <div class="card" id="reviewItemsWrap"></div>
+  `;
+
+  if(hasHistory){
+    html += `<button class="ghost" onclick="repeatLastOrder('${key}')">↻ Repeat last order</button>`;
+  }
+
+  html += `<button class="send-btn" onclick="createOrder('${key}')">＋ Create order</button>`;
+
+  mainEl.innerHTML = html;
+  renderReviewItems();
+}
+
+function renderReviewItems(){
+  const wrap = document.getElementById('reviewItemsWrap');
+  if(!wrap) return;
+
+  const suppliers = getSuppliers();
+  const sup = suppliers.find(s=> supplierKey(s.name, s.phone) === reviewingSupplierKey);
+  if(!sup) return;
+
+  const q = reviewSearch.trim().toLowerCase();
+  const items = q
+    ? sup.items.filter(item=> item.name.toLowerCase().includes(q) || (reviewQty[item.id] && parseFloat(reviewQty[item.id]) > 0))
+    : sup.items;
+
+  if(items.length === 0){
+    wrap.innerHTML = `<div class="empty"><div class="glyph">⌕</div><p>No stock items match "${escapeHtml(reviewSearch)}" for this supplier.</p></div>`;
+    return;
+  }
+
+  let html = '';
+  items.forEach(item=>{
+    html += `
+      <div class="qty-row">
+        <div class="qinfo">
+          <div class="qname">${escapeHtml(item.name)}</div>
+          <div class="qunit">unit: ${escapeHtml(item.unit)}</div>
+        </div>
+        <input class="qty" type="number" min="0" inputmode="numeric" placeholder="0"
+          value="${reviewQty[item.id] || ''}"
+          oninput="reviewQty['${item.id}'] = this.value">
+      </div>
+    `;
+  });
+  wrap.innerHTML = html;
+}
+
+function createOrder(key){
+  const suppliers = getSuppliers();
+  const sup = suppliers.find(s=> supplierKey(s.name, s.phone) === key);
+  if(!sup) return;
+
+  const lines = sup.items
+    .map(item=>({ item, qty: parseFloat(reviewQty[item.id]) }))
+    .filter(x=> x.qty && x.qty > 0);
+
+  if(lines.length === 0){
+    showToast('Enter a quantity for at least one item');
+    return;
+  }
+
+  orderHistory.push({
+    id: uid(),
+    supplierKey: key,
+    supplierName: sup.name,
+    supplierPhone: sup.phone,
+    date: new Date().toISOString(),
+    status: 'active',
+    items: lines.map(x=> ({ name: x.item.name, unit: x.item.unit, qty: x.qty }))
+  });
+  saveOrderHistory();
+  reviewingSupplierKey = null;
+
+  showToast('Order created — send it via WhatsApp from Active');
+  switchTab('active');
+}
+
+/* ---------- ACTIVE / COMPLETED TABS ---------- */
+
+function renderOrdersList(status){
+  const list = orderHistory.filter(o=> o.status === status).slice().reverse();
+  const label = status === 'active' ? 'Active orders' : 'Completed orders';
+  const num = status === 'active' ? '02' : '03';
+  const inSelection = selectionMode && selectionTab === status;
+
+  let html = '';
+  if(inSelection){
+    html += `
+      <div class="select-bar">
+        <div class="sb-left">
+          <button class="sb-cancel" title="Cancel selection" onclick="cancelSelection()">✕</button>
+          <span class="sb-count">${selectedOrderIds.size} selected</span>
+        </div>
+        <button class="sb-delete" onclick="deleteSelectedOrders()" ${selectedOrderIds.size === 0 ? 'disabled' : ''}>🗑 Delete</button>
+      </div>
+    `;
+  } else {
+    html += `<div class="section-label"><span class="left"><span class="num">${num}</span><h2>${label} (${list.length})</h2></span></div>`;
+  }
+
+  if(list.length === 0){
+    if(status === 'active'){
+      html += `<div class="empty"><div class="glyph">·&nbsp;·&nbsp;·</div><p>No active orders.<br>Create an order from the Order tab — it'll wait here until you send it via WhatsApp.</p></div>`;
+    } else {
+      html += `<div class="empty"><div class="glyph">·&nbsp;·&nbsp;·</div><p>No completed orders yet.<br>Mark an active order as completed once stock arrives.</p></div>`;
+    }
+  } else {
+    list.forEach(order=>{
+      const dateStr = (status === 'completed' && order.sentDate) ? formatDateTime(order.sentDate) : formatDateTime(order.date);
+      const isSelected = inSelection && selectedOrderIds.has(order.id);
+      html += `
+        <div class="order-card clickable ${inSelection ? 'selecting' : ''} ${isSelected ? 'selected' : ''}"
+          onmousedown="handleCardPointerDown('${order.id}','${status}')"
+          onmouseup="handleCardPointerUp()"
+          onmouseleave="handleCardPointerUp()"
+          ontouchstart="handleCardPointerDown('${order.id}','${status}')"
+          ontouchend="handleCardPointerUp()"
+          ontouchmove="handleCardPointerUp()"
+          oncontextmenu="return false"
+          onclick="handleCardClick('${order.id}','${status}')">
+          ${inSelection ? `<div class="select-check ${isSelected ? 'checked' : ''}"></div>` : ''}
+          <div class="htop">
+            <span class="status-pill ${order.status}">${order.status}</span>
+            <div class="hdate">${dateStr}</div>
+          </div>
+          <div class="hname">${escapeHtml(order.supplierName)}</div>
+          <div class="hphone">${escapeHtml(order.supplierPhone)}</div>
+        </div>
+      `;
+    });
+  }
+
+  mainEl.innerHTML = html;
+  positionSelectBar();
+}
+
+function positionSelectBar(){
+  const bar = document.querySelector('.select-bar');
+  const header = document.querySelector('header.top');
+  if(bar && header){
+    bar.style.top = header.offsetHeight + 'px';
+  }
+}
+
+/* ---------- MULTI-SELECT (long-press, WhatsApp style) ---------- */
+
+function handleCardPointerDown(orderId, status){
+  longPressFired = false;
+  clearTimeout(longPressTimer);
+  longPressTimer = setTimeout(()=>{
+    longPressFired = true;
+    enterSelectionMode(status, orderId);
+  }, 450);
+}
+
+function handleCardPointerUp(){
+  clearTimeout(longPressTimer);
+}
+
+function handleCardClick(orderId, status){
+  if(longPressFired){ longPressFired = false; return; }
+  if(selectionMode && selectionTab === status){
+    toggleOrderSelection(orderId);
+  } else {
+    openOrderDetail(orderId);
+  }
+}
+
+function enterSelectionMode(status, orderId){
+  selectionMode = true;
+  selectionTab = status;
+  selectedOrderIds = new Set([orderId]);
+  render();
+}
+
+function toggleOrderSelection(orderId){
+  if(selectedOrderIds.has(orderId)){ selectedOrderIds.delete(orderId); }
+  else { selectedOrderIds.add(orderId); }
+  if(selectedOrderIds.size === 0){ selectionMode = false; selectionTab = null; }
+  render();
+}
+
+function cancelSelection(){
+  selectionMode = false;
+  selectionTab = null;
+  selectedOrderIds = new Set();
+  render();
+}
+
+function deleteSelectedOrders(){
+  if(selectedOrderIds.size === 0) return;
+  const count = selectedOrderIds.size;
+  if(!confirm(`Delete ${count} order${count === 1 ? '' : 's'}? This can't be undone.`)) return;
+  orderHistory = orderHistory.filter(o=> !selectedOrderIds.has(o.id));
+  selectionMode = false;
+  selectionTab = null;
+  selectedOrderIds = new Set();
+  saveOrderHistory();
+  render();
+  showToast(`${count} order${count === 1 ? '' : 's'} deleted`);
+}
+
+function sendToWhatsApp(orderId){
+  const o = orderHistory.find(x=> x.id === orderId);
+  if(!o) return;
+  if(o.items.length === 0){ showToast('Add at least one item before sending'); return; }
+
+  const wasActive = o.status === 'active';
+
+  const header = `Order\nTo: ${o.supplierName}\n`;
+  const body = o.items.map(li=> `• ${li.name} — ${li.qty} ${li.unit}`).join('\n');
+  const message = `${header}\n${body}\n\nThank you!`;
+
+  const phoneDigits = cleanPhone(o.supplierPhone);
+  const url = `https://wa.me/${phoneDigits}?text=${encodeURIComponent(message)}`;
+  window.open(url, '_blank');
+
+  o.status = 'completed';
+  o.sentDate = new Date().toISOString();
+  viewingOrderId = null;
+  saveOrderHistory();
+  render();
+  showToast(wasActive ? 'Sent — order moved to Completed' : 'Order resent via WhatsApp');
+}
+
+function deleteOrder(orderId){
+  orderHistory = orderHistory.filter(o=> o.id !== orderId);
+  saveOrderHistory();
+  render();
+}
+
+/* ---------- ORDER DETAIL (view/edit items + send via WhatsApp) ---------- */
+
+function openOrderDetail(orderId){
+  viewingOrderId = orderId;
+  orderDetailSearch = '';
+  render();
+}
+
+function closeOrderDetail(){
+  viewingOrderId = null;
+  render();
+}
+
+function renderOrderDetail(){
+  const o = orderHistory.find(x=> x.id === viewingOrderId);
+  if(!o){ viewingOrderId = null; render(); return; }
+  const editable = o.status === 'active';
+
+  const createdStr = formatDateTime(o.date);
+  const sentStr = o.sentDate ? formatDateTime(o.sentDate) : null;
+
+  let html = `
+    <div class="review-header">
+      <button class="back-btn" onclick="closeOrderDetail()">←</button>
+      <div class="who">
+        <h2>${escapeHtml(o.supplierName)}</h2>
+        <div class="ph">${escapeHtml(o.supplierPhone)}</div>
+      </div>
+      <button class="icon-btn danger" style="margin-left:auto; font-size:16px;" title="Delete order" onclick="deleteOrder('${o.id}')">✕</button>
+    </div>
+    <p class="section-sub" style="margin-top:-10px;">
+      Created ${createdStr}${sentStr ? ` &nbsp;·&nbsp; Sent ${sentStr}` : ''}
+    </p>
+    <div class="section-label"><span class="left"><span class="num">·</span><h2>Order items (${o.items.length})</h2></span></div>
+    <p class="section-sub">${editable ? 'Adjust quantities or remove a line if it needs correcting.' : 'This order has already been sent, so items can\'t be changed.'}</p>
+    <div class="card" id="orderDetailItemsWrap"></div>
+  `;
+
+  if(editable){
+    html += `
+      <div class="section-label"><span class="left"><span class="num">·</span><h2>Add another item</h2></span></div>
+      <div class="card">
+        <div class="search-wrap">
+          <span class="sicon">⌕</span>
+          <input id="f-orderdetail-search" placeholder="Search this supplier's stock…" autocomplete="off"
+            value="${escapeHtml(orderDetailSearch)}" oninput="orderDetailSearch=this.value; renderOrderDetailAddResults()">
+        </div>
+        <div id="orderDetailAddResultsWrap"></div>
+      </div>
+    `;
+  }
+
+  html += `<button class="send-btn" onclick="sendToWhatsApp('${o.id}')">📤 ${editable ? 'Share via WhatsApp' : 'Resend via WhatsApp'}</button>`;
+
+  mainEl.innerHTML = html;
+  renderOrderDetailItems();
+  if(editable) renderOrderDetailAddResults();
+}
+
+function renderOrderDetailItems(){
+  const wrap = document.getElementById('orderDetailItemsWrap');
+  if(!wrap) return;
+  const o = orderHistory.find(x=> x.id === viewingOrderId);
+  if(!o) return;
+  const editable = o.status === 'active';
+
+  if(o.items.length === 0){
+    wrap.innerHTML = `<div class="empty"><div class="glyph">·&nbsp;·&nbsp;·</div><p>${editable ? 'No items in this order yet.<br>Search below to add one.' : 'No items in this order.'}</p></div>`;
+    return;
+  }
+
+  let html = '';
+  o.items.forEach((li, i)=>{
+    if(editable){
+      html += `
+        <div class="qty-row">
+          <div class="qinfo">
+            <div class="qname">${escapeHtml(li.name)}</div>
+            <div class="qunit">unit: ${escapeHtml(li.unit)}</div>
+          </div>
+          <input class="qty" type="number" min="0" inputmode="numeric" value="${li.qty}"
+            oninput="updateOrderItemQty(${i}, this.value)">
+          <button class="icon-btn danger" title="Remove" onclick="removeOrderItem(${i})">✕</button>
+        </div>
+      `;
+    } else {
+      html += `
+        <div class="qty-row">
+          <div class="qinfo">
+            <div class="qname">${escapeHtml(li.name)}</div>
+            <div class="qunit">unit: ${escapeHtml(li.unit)}</div>
+          </div>
+          <div style="font-family:'IBM Plex Mono', monospace; font-weight:600; font-size:14px; color:var(--ink);">${li.qty}</div>
+        </div>
+      `;
+    }
+  });
+  wrap.innerHTML = html;
+}
+
+function updateOrderItemQty(index, value){
+  const o = orderHistory.find(x=> x.id === viewingOrderId);
+  if(!o) return;
+  const qty = parseFloat(value);
+  o.items[index].qty = qty > 0 ? qty : 0;
+  saveOrderHistory();
+}
+
+function removeOrderItem(index){
+  const o = orderHistory.find(x=> x.id === viewingOrderId);
+  if(!o) return;
+  o.items.splice(index, 1);
+  saveOrderHistory();
+  renderOrderDetail();
+  showToast('Item removed from order');
+}
+
+function renderOrderDetailAddResults(){
+  const wrap = document.getElementById('orderDetailAddResultsWrap');
+  if(!wrap) return;
+  const o = orderHistory.find(x=> x.id === viewingOrderId);
+  if(!o) return;
+
+  const q = orderDetailSearch.trim().toLowerCase();
+  if(!q){ wrap.innerHTML = ''; return; }
+
+  const existingKeys = new Set(o.items.map(li=> li.name.toLowerCase() + '|' + li.unit.toLowerCase()));
+  const supplierStocks = stocks.filter(s=> supplierKey(s.supplierName, s.supplierPhone) === o.supplierKey);
+  const matches = supplierStocks.filter(s=>
+    s.name.toLowerCase().includes(q) && !existingKeys.has(s.name.toLowerCase() + '|' + s.unit.toLowerCase())
+  ).slice(0, 8);
+
+  if(matches.length === 0){
+    wrap.innerHTML = `<div class="search-results"><div class="sr-empty">No matching items to add.</div></div>`;
+    return;
+  }
+
+  wrap.innerHTML = `<div class="search-results">` + matches.map(s=> `
+    <div class="sr-item" onclick="addItemToOrderDetail('${s.id}')">
+      <div class="sr-name">${escapeHtml(s.name)}</div>
+      <div class="sr-meta">${escapeHtml(s.unit)}</div>
+    </div>
+  `).join('') + `</div>`;
+}
+
+function addItemToOrderDetail(stockId){
+  const o = orderHistory.find(x=> x.id === viewingOrderId);
+  const item = stocks.find(s=> s.id === stockId);
+  if(!o || !item) return;
+
+  o.items.push({ name: item.name, unit: item.unit, qty: 1 });
+  saveOrderHistory();
+  orderDetailSearch = '';
+  renderOrderDetail();
+  showToast('Item added — set the quantity');
+}
+
+/* ---------- STOCKS TAB ---------- */
+
+function renderStocks(){
+  let html = `
+    <div class="section-label">
+      <span class="left"><span class="num">04</span><h2>All stocks (${stocks.length})</h2></span>
+      <select class="sort-select" onchange="stocksSort=this.value; render()">
+        <option value="az" ${stocksSort==='az'?'selected':''}>A–Z</option>
+        <option value="recent" ${stocksSort==='recent'?'selected':''}>Recently added</option>
+      </select>
+    </div>
+  `;
+
+  if(stocks.length > 0){
+    html += `
+      <div class="search-wrap">
+        <span class="sicon">⌕</span>
+        <input id="f-search" placeholder="Search by name, unit or supplier" value="${escapeHtml(stocksSearch)}" oninput="stocksSearch=this.value; renderStocksList()">
+      </div>
+    `;
+  }
+
+  html += `<div id="stocksListWrap"></div>`;
+
+  mainEl.innerHTML = html;
+  renderStocksList();
+}
+
+function getFilteredSortedStocks(){
+  let list = stocks.slice();
+  if(stocksSearch.trim()){
+    const q = stocksSearch.trim().toLowerCase();
+    list = list.filter(s=>
+      s.name.toLowerCase().includes(q) ||
+      s.unit.toLowerCase().includes(q) ||
+      s.supplierName.toLowerCase().includes(q)
+    );
+  }
+  if(stocksSort === 'az'){
+    list.sort((a,b)=> a.name.localeCompare(b.name));
+  }
+  return list;
+}
+
+function renderStocksList(){
+  const wrap = document.getElementById('stocksListWrap');
+  if(!wrap) return;
+  const list = getFilteredSortedStocks();
+
+  if(stocks.length === 0){
+    wrap.innerHTML = `<div class="empty"><div class="glyph">·&nbsp;·&nbsp;·</div><p>Nothing logged yet.<br>Add your first stock item from the Order tab to start building your order book.</p></div>`;
+    return;
+  }
+  if(list.length === 0){
+    wrap.innerHTML = `<div class="empty"><div class="glyph">⌕</div><p>No items match "${escapeHtml(stocksSearch)}".</p></div>`;
+    return;
+  }
+
+  let html = '<div class="card">';
+  list.forEach((s, i)=>{
+    html += `
+      <div class="ledger-row">
+        <span class="idx">${String(i+1).padStart(3,'0')}</span>
+        <div class="info">
+          <div class="name">${escapeHtml(s.name)}</div>
+          <div class="meta">${escapeHtml(s.supplierName)} · ${escapeHtml(s.supplierPhone)}</div>
+        </div>
+        <span class="unit-pill">${escapeHtml(s.unit)}</span>
+        <button class="icon-btn" title="Edit" onclick="startEditStock('${s.id}')">✎</button>
+        <button class="icon-btn danger" title="Remove" onclick="removeStock('${s.id}')">✕</button>
+      </div>
+    `;
+  });
+  html += '</div>';
+  wrap.innerHTML = html;
+}
+
+function submitStockForm(){
+  const name = document.getElementById('f-name').value.trim();
+  const unit = document.getElementById('f-unit').value.trim();
+  const sname = document.getElementById('f-sname').value.trim();
+  const sphone = document.getElementById('f-sphone').value.trim();
+
+  if(!name || !unit || !sname || !sphone){
+    showToast('Fill in all four fields to continue');
+    return;
+  }
+
+  const otherStocks = stocks.filter(s=> s.id !== editingStockId);
+
+  const dupStock = otherStocks.find(s=> s.name.trim().toLowerCase() === name.toLowerCase());
+  if(dupStock){
+    showToast(`A stock item named "${name}" already exists`);
+    return;
+  }
+
+  const dupSupplier = getSuppliersFrom(otherStocks).find(sup=>
+    sup.name.trim().toLowerCase() === sname.toLowerCase() && cleanPhone(sup.phone) !== cleanPhone(sphone)
+  );
+  if(dupSupplier){
+    showToast(`Supplier "${sname}" already exists with a different phone number`);
+    return;
+  }
+
+  if(editingStockId){
+    const item = stocks.find(s=> s.id === editingStockId);
+    if(item){
+      item.name = name; item.unit = unit; item.supplierName = sname; item.supplierPhone = sphone;
+    }
+    saveStocks();
+    closeStockForm();
+    showToast('Changes saved');
+  } else {
+    const newItem = { id: uid(), name, unit, supplierName: sname, supplierPhone: sphone };
+    stocks.push(newItem);
+    saveStocks();
+    addingNewStock = false;
+    orderSearchQuery = newItem.name;
+    orderSelectedItemId = newItem.id;
+    orderQty = '';
+    render();
+    const qtyInput = document.getElementById('f-order-qty');
+    if(qtyInput) qtyInput.focus();
+    showToast('Added to order book — enter a quantity to order it');
+  }
+}
+
+function startEditStock(id){
+  switchTab('order');
+  editingStockId = id;
+  addingNewStock = false;
+  render();
+  window.scrollTo({ top:0, behavior:'smooth' });
+}
+
+function removeStock(id){
+  stocks = stocks.filter(s=> s.id !== id);
+  if(editingStockId === id) editingStockId = null;
+  saveStocks();
+  render();
+}
+
+/* ---------- SUPPLIERS DIRECTORY TAB ---------- */
+
+function renderSuppliersDirectory(){
+  const suppliers = getSuppliers();
+  let html = `
+    <div class="section-label">
+      <span class="left"><span class="num">05</span><h2>Suppliers (${suppliers.length})</h2></span>
+      <select class="sort-select" onchange="suppliersSort=this.value; render()">
+        <option value="az" ${suppliersSort==='az'?'selected':''}>A–Z</option>
+        <option value="recent" ${suppliersSort==='recent'?'selected':''}>Recently added</option>
+      </select>
+    </div>
+  `;
+
+  if(suppliers.length === 0){
+    html += `<div class="empty"><div class="glyph">·&nbsp;·&nbsp;·</div><p>No suppliers yet.<br>Add stock items from the Order tab — suppliers appear here automatically.</p></div>`;
+  } else {
+    suppliers.forEach(sup=>{
+      const key = supplierKey(sup.name, sup.phone);
+      html += `
+        <div class="supplier-card" onclick="viewSupplierStocks('${key}')">
+          <div class="top-row">
+            <div>
+              <div class="sname">${escapeHtml(sup.name)}</div>
+              <div class="sphone">${escapeHtml(sup.phone)}</div>
+            </div>
+            <div class="sitems">${sup.items.length} item${sup.items.length===1?'':'s'}</div>
+          </div>
+        </div>
+      `;
+    });
+  }
+
+  mainEl.innerHTML = html;
+}
+
+function viewSupplierStocks(key){
+  supplierStocksViewKey = key;
+  render();
+}
+
+function closeSupplierStocksView(){
+  supplierStocksViewKey = null;
+  render();
+}
+
+function renderSupplierStockList(){
+  const suppliers = getSuppliers();
+  const sup = suppliers.find(s=> supplierKey(s.name, s.phone) === supplierStocksViewKey);
+  if(!sup){ supplierStocksViewKey = null; render(); return; }
+
+  let html = `
+    <div class="review-header">
+      <button class="back-btn" onclick="closeSupplierStocksView()">←</button>
+      <div class="who">
+        <h2>${escapeHtml(sup.name)}</h2>
+        <div class="ph">${escapeHtml(sup.phone)}</div>
+      </div>
+    </div>
+    <div class="section-label"><span class="left"><span class="num">·</span><h2>Stock items (${sup.items.length})</h2></span></div>
+    <p class="section-sub">Tap an item to add a quantity to your order.</p>
+    <div class="card">
+  `;
+
+  sup.items.forEach((item, i)=>{
+    html += `
+      <div class="ledger-row" style="cursor:pointer" onclick="openAddModal('${item.id}')">
+        <span class="idx">${String(i+1).padStart(3,'0')}</span>
+        <div class="info">
+          <div class="name">${escapeHtml(item.name)}</div>
+        </div>
+        <span class="unit-pill">${escapeHtml(item.unit)}</span>
+      </div>
+    `;
+  });
+
+  html += '</div>';
+  mainEl.innerHTML = html;
+}
+
+function openAddModal(itemId){
+  const item = stocks.find(s=> s.id === itemId);
+  if(!item) return;
+  modalItemId = itemId;
+  document.getElementById('modalTitle').textContent = item.name;
+  document.getElementById('modalUnit').textContent = 'unit: ' + item.unit;
+  const qtyInput = document.getElementById('modalQtyInput');
+  qtyInput.value = '';
+  document.getElementById('modalOverlay').classList.add('show');
+  setTimeout(()=> qtyInput.focus(), 50);
+}
+
+function closeAddModal(){
+  document.getElementById('modalOverlay').classList.remove('show');
+  modalItemId = null;
+}
+
+function confirmAddToOrder(){
+  const qtyInput = document.getElementById('modalQtyInput');
+  const qty = parseFloat(qtyInput.value);
+  if(!qty || qty <= 0){
+    showToast('Enter a valid quantity');
+    return;
+  }
+  const item = stocks.find(s=> s.id === modalItemId);
+  if(!item) return;
+
+  const key = supplierKey(item.supplierName, item.supplierPhone);
+  let order = orderHistory.find(o=> o.supplierKey === key && o.status === 'active');
+  if(!order){
+    order = {
+      id: uid(),
+      supplierKey: key,
+      supplierName: item.supplierName,
+      supplierPhone: item.supplierPhone,
+      date: new Date().toISOString(),
+      status: 'active',
+      items: []
+    };
+    orderHistory.push(order);
+  }
+
+  const existingLine = order.items.find(li=> li.name === item.name && li.unit === item.unit);
+  if(existingLine){ existingLine.qty = qty; } else { order.items.push({ name: item.name, unit: item.unit, qty }); }
+
+  saveOrderHistory();
+  closeAddModal();
+  render();
+  showToast('Added to order — view it in Active');
+}
+
+function escapeHtml(str){
+  return (str || '').replace(/[&<>"']/g, c=>({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[c]));
+}
+
+TABS.forEach(t=> document.getElementById('tab' + capitalize(t) + 'Btn').classList.toggle('active', t === currentTab));
+window.addEventListener('resize', positionSelectBar);
+loadData();
+</script>
+</body>
+</html>
