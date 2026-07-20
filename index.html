@@ -33,8 +33,12 @@
     --radius:10px;
   }
   *{box-sizing:border-box;}
-  body{
+  html, body{
+    height:100%;
     margin:0;
+    overflow:hidden; /* the page itself never scrolls; main does (see below) */
+  }
+  body{
     background:var(--paper);
     color:var(--ink);
     font-family:'IBM Plex Sans', sans-serif;
@@ -43,7 +47,9 @@
   .app{
     max-width:520px;
     margin:0 auto;
-    min-height:100vh;
+    height:100vh;
+    height:100dvh; /* dynamic viewport height where supported */
+    overflow:hidden;
     background:var(--paper);
     display:flex;
     flex-direction:column;
@@ -124,7 +130,16 @@
     color:#9AA5B1;
   }
 
-  main{ flex:1; padding:18px 16px 96px 16px; touch-action:pan-y; will-change:transform; }
+  main{
+    flex:1 1 auto;
+    min-height:0; /* required so a flex child can actually scroll internally */
+    overflow-y:auto;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior-y:contain;
+    padding:18px 16px 24px 16px;
+    touch-action:pan-y;
+    will-change:transform;
+  }
   main:not(.dragging){ transition:transform .28s cubic-bezier(.22,.61,.36,1); }
   main.dragging{ transition:none; }
 
@@ -146,12 +161,8 @@
 
   /* Bottom nav */
   nav.bottom-tabs{
-    position:fixed;
-    left:50%;
-    bottom:0;
-    transform:translateX(-50%);
+    flex-shrink:0; /* in normal flex flow at the bottom of .app, not fixed to the viewport */
     width:100%;
-    max-width:520px;
     display:flex;
     background:var(--ink);
     border-top:1px solid #303B4B;
@@ -826,19 +837,20 @@
      under the header (via flex `order`, no HTML changes needed) and lays
      its buttons out horizontally, like a desktop app's tab strip. */
   @media (min-width: 768px){
+    html, body{ height:auto; overflow:visible; }
     body{ background:#EDEAE0; }
     .app{
       max-width:640px;
+      height:auto;
       min-height:100vh;
+      overflow:visible;
       box-shadow:0 0 0 1px var(--line), 0 12px 32px rgba(27,36,48,.08);
     }
 
+    main{ overflow-y:visible; min-height:0; }
+
     nav.bottom-tabs{
-      position:static;
       order:1;
-      left:auto;
-      bottom:auto;
-      transform:none;
       width:100%;
       max-width:none;
       border-top:none;
@@ -2121,6 +2133,7 @@ function switchTab(tab){
     document.getElementById('tab' + capitalize(t) + 'Btn').classList.toggle('active', t === tab);
   });
   render();
+  mainEl.scrollTop = 0;
   mainEl.classList.remove('dragging');
   mainEl.style.transform = '';
   mainEl.classList.remove('tab-anim-next', 'tab-anim-prev', 'tab-anim-fade');
@@ -3215,7 +3228,7 @@ function startEditStock(id){
   editingStockId = id;
   addingNewStock = false;
   render();
-  window.scrollTo({ top:0, behavior:'smooth' });
+  mainEl.scrollTo({ top:0, behavior:'smooth' });
 }
 
 function removeStock(id){
