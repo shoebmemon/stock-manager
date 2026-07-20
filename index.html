@@ -138,10 +138,12 @@
     overscroll-behavior-y:contain;
     padding:18px 16px 24px 16px;
     touch-action:pan-y;
-    will-change:transform;
+    transform:translateZ(0); /* own compositing layer at rest, avoids a layer-promotion hitch when the drag starts */
+    backface-visibility:hidden;
+    -webkit-backface-visibility:hidden;
   }
   main:not(.dragging){ transition:transform .28s cubic-bezier(.22,.61,.36,1); }
-  main.dragging{ transition:none; }
+  main.dragging{ transition:none; will-change:transform; }
 
   main.tab-anim-next{ animation:tabSlideFromRight .28s cubic-bezier(.22,.61,.36,1); }
   main.tab-anim-prev{ animation:tabSlideFromLeft .28s cubic-bezier(.22,.61,.36,1); }
@@ -1129,6 +1131,8 @@ window.addEventListener('popstate', ()=>{
 pushBackGuard();
 
 let swipeDragging = false;
+let swipeRafId = null;
+let pendingFollow = null;
 
 function handleSwipeStart(e){
   const t = e.touches[0];
@@ -1136,6 +1140,14 @@ function handleSwipeStart(e){
   swipeStartY = t.clientY;
   swipeStartTime = Date.now();
   swipeDragging = false;
+  if(swipeRafId){ cancelAnimationFrame(swipeRafId); swipeRafId = null; }
+}
+
+function applyPendingFollow(){
+  swipeRafId = null;
+  if(pendingFollow === null) return;
+  mainEl.style.transform = `translate3d(${pendingFollow}px,0,0)`;
+  pendingFollow = null;
 }
 
 function handleSwipeMove(e){
@@ -1167,13 +1179,23 @@ function handleSwipeMove(e){
     follow = dx * 0.3; // rubber-band resistance at the ends, nothing to swipe to
   }
   follow = Math.max(-130, Math.min(130, follow));
-  mainEl.style.transform = `translateX(${follow}px)`;
+
+  // Touch fires faster than the screen can paint on a lot of devices — only
+  // ever queue one style write per animation frame instead of one per event,
+  // which is what was making the drag feel laggy/stuttery.
+  pendingFollow = follow;
+  if(swipeRafId === null){
+    swipeRafId = requestAnimationFrame(applyPendingFollow);
+  }
 }
 
 function handleSwipeEnd(e){
   const wasDragging = swipeDragging;
   swipeDragging = false;
   mainEl.classList.remove('dragging');
+
+  if(swipeRafId){ cancelAnimationFrame(swipeRafId); swipeRafId = null; }
+  pendingFollow = null;
 
   if(isSelecting() || isOverlayOpen()){
     mainEl.style.transform = '';
