@@ -45,11 +45,40 @@
     position:sticky;
     top:0;
     z-index:20;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
   }
   .brand{
     display:flex;
     align-items:baseline;
-    justify-content:space-between;
+    gap:8px;
+    user-select:none;
+    -webkit-user-select:none;
+    -webkit-touch-callout:none;
+    touch-action:manipulation;
+  }
+  .header-icon-btn{
+    background:transparent;
+    border:1px solid #3A4658;
+    color:#C7CDD6;
+    cursor:pointer;
+    width:32px;
+    height:32px;
+    border-radius:7px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    flex-shrink:0;
+  }
+  .header-icon-btn:hover{ color:var(--amber); border-color:var(--amber); }
+  .header-icon-btn svg{ width:16px; height:16px; }
+  .header-btn-group{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    flex-shrink:0;
   }
   .brand h1{
     font-family:'Space Grotesk', sans-serif;
@@ -57,6 +86,24 @@
     font-size:22px;
     margin:0;
     letter-spacing:0.2px;
+  }
+  .sync-status{
+    display:inline-block;
+    width:7px;
+    height:7px;
+    border-radius:50%;
+    background:#8890A0;
+    align-self:center;
+  }
+  .sync-status.online{ background:var(--whatsapp); }
+  .sync-status.offline{ background:var(--amber); }
+  .sync-status.syncing{
+    background:var(--amber);
+    animation:syncPulse 1s ease-in-out infinite;
+  }
+  @keyframes syncPulse{
+    0%, 100%{ opacity:1; }
+    50%{ opacity:.3; }
   }
   .brand .mark{ color:var(--amber); }
   .brand .count{
@@ -680,6 +727,18 @@
   .modal-actions{ display:flex; gap:10px; margin-top:16px; }
   .modal-actions button{ flex:1; margin-top:0; }
 
+  .data-card{ text-align:left; max-height:78vh; overflow-y:auto; }
+  .data-card .card{ text-align:left; }
+  .data-card .card label{ margin-top:0; }
+  .data-card .card button.ghost{ width:100%; margin-top:8px; text-align:left; }
+  .data-card .card button.ghost:first-of-type{ margin-top:0; }
+  .data-note{
+    font-size:12px;
+    color:var(--slate);
+    margin:0 0 12px 0;
+    line-height:1.5;
+  }
+
   .toast{
     position:fixed;
     bottom:78px;
@@ -700,13 +759,66 @@
   }
   .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 
+  /* ---------- DESKTOP LAYOUT ---------- */
+  /* Below 768px this stays a single mobile-style column with a fixed bottom
+     tab bar. Above it, the tab bar moves into the normal document flow right
+     under the header (via flex `order`, no HTML changes needed) and lays
+     its buttons out horizontally, like a desktop app's tab strip. */
+  @media (min-width: 768px){
+    body{ background:#EDEAE0; }
+    .app{
+      max-width:640px;
+      min-height:100vh;
+      box-shadow:0 0 0 1px var(--line), 0 12px 32px rgba(27,36,48,.08);
+    }
+
+    nav.bottom-tabs{
+      position:static;
+      order:1;
+      left:auto;
+      bottom:auto;
+      transform:none;
+      width:100%;
+      max-width:none;
+      border-top:none;
+      border-bottom:1px solid #303B4B;
+      padding:6px 8px;
+    }
+    nav.bottom-tabs button{
+      flex-direction:row;
+      gap:8px;
+      padding:11px 8px;
+      border-radius:7px;
+    }
+    nav.bottom-tabs button:hover{ background:rgba(255,255,255,.05); color:var(--paper); }
+    nav.bottom-tabs button .bn-icon{ width:17px; height:17px; }
+    nav.bottom-tabs button.active::after{
+      top:auto;
+      bottom:2px;
+    }
+    nav.bottom-tabs button .bn-badge{ position:static; margin-left:2px; }
+
+    main{ order:2; padding-bottom:24px; }
+
+    .toast{ bottom:24px; }
+  }
+
 </style>
 </head>
 <body>
 <div class="app">
   <header class="top">
-    <div class="brand">
+    <div class="brand"
+      onmousedown="handleLogoPressStart()" onmouseup="handleLogoPressEnd()" onmouseleave="handleLogoPressEnd()"
+      ontouchstart="handleLogoPressStart()" ontouchend="handleLogoPressEnd()" ontouchcancel="handleLogoPressEnd()"
+      oncontextmenu="return false">
       <h1>Stock<span class="mark">line</span></h1>
+      <span class="sync-status" id="syncStatus"></span>
+    </div>
+    <div class="header-btn-group">
+      <button class="header-icon-btn" title="Add item & supplier" onclick="openAddStockPage()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
     </div>
   </header>
 
@@ -751,7 +863,46 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="backupOverlay" onclick="if(event.target===this) closeBackupPanel()">
+  <div class="modal-card data-card">
+    <div class="modal-title">Import, export &amp; backup</div>
+    <p class="modal-unit" style="margin-bottom:14px;">Everything runs on this device — nothing is uploaded anywhere.</p>
+
+    <div class="card">
+      <label>Items &amp; suppliers</label>
+      <p class="data-note">Export your item list as a CSV or Excel file — each row carries its supplier's name and phone. In the Excel template, once you've typed a supplier's name once, Excel will suggest it again on later rows and auto-fill the phone number when you pick it. Importing never deletes anything: rows already in your list (same name, unit &amp; supplier) are skipped, everything else is appended.</p>
+      <button class="ghost small" onclick="downloadItemsTemplate()">📄 Download Excel template</button>
+      <button class="ghost small" onclick="exportItemsCsv()">⬇ Export as CSV (.csv)</button>
+      <button class="ghost small" onclick="exportItemsExcel()">⬇ Export as Excel (.xlsx)</button>
+      <button class="ghost small" onclick="document.getElementById('importItemsFile').click()">⬆ Import from CSV or Excel</button>
+    </div>
+
+    <div class="card">
+      <label>Full backup</label>
+      <p class="data-note">Export everything — items, suppliers, active and completed orders. Restoring a backup <strong>replaces all current data</strong> on this device.</p>
+      <button class="ghost small" onclick="exportFullBackup()">⬇ Export full backup (.json)</button>
+      <button class="ghost small" onclick="document.getElementById('importFullFile').click()">⬆ Restore from backup (.json)</button>
+    </div>
+
+    <button class="ghost" onclick="closeBackupPanel()">Close</button>
+  </div>
+</div>
+<input type="file" id="importItemsFile" accept=".csv,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="display:none" onchange="handleImportItemsSuppliersFile(event)">
+<input type="file" id="importFullFile" accept=".json,application/json" style="display:none" onchange="handleImportFullBackupFile(event)">
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
+/* ---------- SUPABASE ---------- */
+
+const SUPABASE_URL = "https://yelntqtohnqtfintfpbc.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InllbG50cXRvaG5xdGZpbnRmcGJjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQ0OTAwNDAsImV4cCI6MjEwMDA2NjA0MH0.oza8ionpTuIesyII0ySMA8b3EDJ5HjlF5bOTNvJ0Pck";
+
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Local cache: lowercase-trimmed supplier name -> { id, name, phone }
+let supplierCache = new Map();
+
 let stocks = [];
 let orderHistory = [];
 let currentTab = 'order';
@@ -762,6 +913,7 @@ let stocksSearch = '';
 let stocksSort = 'az';
 let suppliersSort = 'az';
 let suppliersSearch = '';
+let ordersSearch = { active: '', completed: '' };
 let reviewQty = {};
 let reviewSearch = '';
 let loaded = false;
@@ -806,19 +958,21 @@ function isSelecting(){
 }
 
 function getNestedViewCloser(){
+  if(editingStockId || addingNewStock) return closeStockForm;
   if(supplierStocksViewKey) return closeSupplierStocksView;
   if(viewingOrderId) return closeOrderDetail;
   if(reviewingSupplierKey) return closeReview;
   if(editingSupplierKey) return closeEditSupplier;
-  if(editingStockId || addingNewStock) return closeStockForm;
   return null;
 }
 
 function isOverlayOpen(){
   const modal = document.getElementById('modalOverlay');
   const confirmOverlay = document.getElementById('appConfirmOverlay');
+  const backupOverlay = document.getElementById('backupOverlay');
   return (modal && modal.classList.contains('show')) ||
-         (confirmOverlay && confirmOverlay.classList.contains('show'));
+         (confirmOverlay && confirmOverlay.classList.contains('show')) ||
+         (backupOverlay && backupOverlay.classList.contains('show'));
 }
 
 function handleSwipeStart(e){
@@ -929,7 +1083,15 @@ function showAppAlert(message, title){
 }
 
 function uid(){
-  return 's' + Date.now().toString(36) + Math.random().toString(36).slice(2,7);
+  if(window.crypto && window.crypto.randomUUID){
+    return window.crypto.randomUUID();
+  }
+  // Fallback UUID v4 generator for older browsers
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c=>{
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
 }
 
 function showDuplicateItemModal(order, item, existingLine, newQty){
@@ -1032,33 +1194,711 @@ function showDuplicateBatchModal(order, duplicates){
   };
 }
 
+/* ---------- OFFLINE-FIRST STORAGE ---------- */
+
+const LOCAL_CACHE_KEY = 'stockline_cache_v1';
+let isOnline = navigator.onLine;
+let pendingSync = false;
+let syncing = false;
+
+function cacheLocally(){
+  try{
+    localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify({ stocks, orderHistory, cachedAt: Date.now() }));
+  }catch(e){
+    console.error('Failed to write local cache', e);
+  }
+}
+
+// ----- "Recently added" tracking -----
+// The remote `stocks` table has no created-at column, so recency is tracked
+// here on-device, keyed by item id. Once an id gets a timestamp it keeps it
+// for the life of the item, even across reloads and remote syncs.
+const CREATED_AT_CACHE_KEY = 'stockline_created_at_v1';
+
+function loadCreatedAtMap(){
+  try{
+    return JSON.parse(localStorage.getItem(CREATED_AT_CACHE_KEY) || '{}');
+  }catch(e){
+    return {};
+  }
+}
+
+function saveCreatedAtMap(map){
+  try{
+    localStorage.setItem(CREATED_AT_CACHE_KEY, JSON.stringify(map));
+  }catch(e){
+    console.error('Failed to write created-at cache', e);
+  }
+}
+
+// Ensures every stock item has a createdAt, reusing a known timestamp for an
+// id if we've seen it before, otherwise stamping it as "now". Call this any
+// time `stocks` is repopulated from a source that may lack the field
+// (remote sync, CSV/Excel import, JSON restore).
+function reconcileCreatedAt(){
+  const map = loadCreatedAtMap();
+  let changed = false;
+  stocks.forEach(s=>{
+    if(s.createdAt){
+      if(map[s.id] !== s.createdAt){ map[s.id] = s.createdAt; changed = true; }
+    } else if(map[s.id]){
+      s.createdAt = map[s.id];
+    } else {
+      s.createdAt = new Date().toISOString();
+      map[s.id] = s.createdAt;
+      changed = true;
+    }
+  });
+  if(changed) saveCreatedAtMap(map);
+}
+
+function loadLocalCache(){
+  try{
+    const raw = localStorage.getItem(LOCAL_CACHE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  }catch(e){
+    return null;
+  }
+}
+
+function updateSyncIndicator(){
+  const el = document.getElementById('syncStatus');
+  if(!el) return;
+  el.classList.remove('online', 'offline', 'syncing');
+  if(syncing){
+    el.classList.add('syncing');
+    el.title = 'Syncing…';
+  } else if(!isOnline){
+    el.classList.add('offline');
+    el.title = 'Offline — saved on device';
+  } else if(pendingSync){
+    el.classList.add('syncing');
+    el.title = 'Changes pending…';
+  } else {
+    el.classList.add('online');
+    el.title = 'Synced';
+  }
+}
+
+async function ensureSupplierId(name, phone){
+  const key = name.trim().toLowerCase();
+  if(supplierCache.has(key)) return supplierCache.get(key).id;
+
+  // Cache miss — refresh from the DB once in case another device just
+  // created this supplier, before assuming it's genuinely new.
+  const { data: all, error: selErr } = await sb.from('suppliers').select('*');
+  if(selErr) throw selErr;
+  supplierCache = new Map(all.map(s=> [s.name.trim().toLowerCase(), s]));
+  if(supplierCache.has(key)) return supplierCache.get(key).id;
+
+  const { data: created, error: insErr } = await sb
+    .from('suppliers')
+    .insert({ name: name.trim(), phone: phone.trim() })
+    .select()
+    .single();
+  if(insErr) throw insErr;
+  supplierCache.set(key, created);
+  return created.id;
+}
+
 async function loadData(){
+  const cached = loadLocalCache();
+  if(cached){
+    stocks = cached.stocks || [];
+    orderHistory = cached.orderHistory || [];
+    reconcileCreatedAt();
+    loaded = true;
+    render();
+  }
+
+  if(!navigator.onLine){
+    isOnline = false;
+    if(!cached){ stocks = []; orderHistory = []; loaded = true; render(); }
+    updateSyncIndicator();
+    return;
+  }
+
   try{
-    const r = await window.storage.get('stocks', false);
-    stocks = r ? JSON.parse(r.value) : [];
-  }catch(e){ stocks = []; }
-  try{
-    const r3 = await window.storage.get('order-history', false);
-    orderHistory = r3 ? JSON.parse(r3.value) : [];
-    // Migrate older entries logged before Active/Completed existed:
-    // treat them as already completed so they don't clutter Active.
-    let migrated = false;
-    orderHistory.forEach(o=>{ if(!o.status){ o.status = 'completed'; migrated = true; } });
-    orderHistory.forEach(o=>{ if(o.status === 'completed' && !o.sentDate){ o.sentDate = o.date; migrated = true; } });
-    if(migrated) saveOrderHistory();
-  }catch(e){ orderHistory = []; }
+    const [suppliersRes, stocksRes, ordersRes] = await Promise.all([
+      sb.from('suppliers').select('*'),
+      sb.from('stocks').select('*'),
+      sb.from('orders').select('*')
+    ]);
+    if(suppliersRes.error) throw suppliersRes.error;
+    if(stocksRes.error) throw stocksRes.error;
+    if(ordersRes.error) throw ordersRes.error;
+
+    const supplierById = new Map((suppliersRes.data || []).map(s=> [s.id, s]));
+    supplierCache = new Map((suppliersRes.data || []).map(s=> [s.name.trim().toLowerCase(), s]));
+
+    stocks = (stocksRes.data || []).map(s=>{
+      const sup = supplierById.get(s.supplier_id) || { name:'', phone:'' };
+      return { id: s.id, name: s.name, unit: s.unit, supplierName: sup.name, supplierPhone: sup.phone };
+    });
+    reconcileCreatedAt();
+
+    orderHistory = (ordersRes.data || []).map(o=>{
+      const sup = supplierById.get(o.supplier_id) || { name:'', phone:'' };
+      return {
+        id: o.id,
+        supplierKey: supplierKey(sup.name, sup.phone),
+        supplierName: sup.name,
+        supplierPhone: sup.phone,
+        status: o.status,
+        items: o.items || [],
+        date: o.order_date,
+        sentDate: o.sent_date || undefined
+      };
+    });
+
+    isOnline = true;
+    pendingSync = false;
+    cacheLocally();
+  } catch(err){
+    console.error('Failed to load from Supabase', err);
+    isOnline = false;
+    if(!cached){
+      stocks = [];
+      orderHistory = [];
+      showToast('Could not load data — check your connection');
+    }
+  }
   loaded = true;
   render();
+  updateSyncIndicator();
+}
+
+// Pushes the full current in-memory state to Supabase. Used both by the
+// normal save functions and by the retry logic once connectivity returns.
+async function syncStocksToRemote(){
+  const { data: remote, error: selErr } = await sb.from('stocks').select('id');
+  if(selErr) throw selErr;
+  const remoteIds = new Set((remote || []).map(r=> r.id));
+  const localIds = new Set(stocks.map(s=> s.id));
+
+  const rows = [];
+  for(const s of stocks){
+    const supplier_id = await ensureSupplierId(s.supplierName, s.supplierPhone);
+    rows.push({ id: s.id, name: s.name, unit: s.unit, supplier_id });
+  }
+
+  if(rows.length > 0){
+    const { error: upErr } = await sb.from('stocks').upsert(rows, { onConflict: 'id' });
+    if(upErr) throw upErr;
+  }
+
+  const toDelete = [...remoteIds].filter(id=> !localIds.has(id));
+  if(toDelete.length > 0){
+    const { error: delErr } = await sb.from('stocks').delete().in('id', toDelete);
+    if(delErr) throw delErr;
+  }
+}
+
+async function syncOrdersToRemote(){
+  const { data: remote, error: selErr } = await sb.from('orders').select('id');
+  if(selErr) throw selErr;
+  const remoteIds = new Set((remote || []).map(r=> r.id));
+  const localIds = new Set(orderHistory.map(o=> o.id));
+
+  const rows = [];
+  for(const o of orderHistory){
+    const supplier_id = await ensureSupplierId(o.supplierName, o.supplierPhone);
+    rows.push({ id: o.id, supplier_id, status: o.status, items: o.items, order_date: o.date, sent_date: o.sentDate || null });
+  }
+
+  if(rows.length > 0){
+    const { error: upErr } = await sb.from('orders').upsert(rows, { onConflict: 'id' });
+    if(upErr) throw upErr;
+  }
+
+  const toDelete = [...remoteIds].filter(id=> !localIds.has(id));
+  if(toDelete.length > 0){
+    const { error: delErr } = await sb.from('orders').delete().in('id', toDelete);
+    if(delErr) throw delErr;
+  }
 }
 
 async function saveStocks(){
-  try{ await window.storage.set('stocks', JSON.stringify(stocks), false); }
-  catch(e){ showToast('Could not save — try again'); }
+  // Always save locally first — this always succeeds, online or offline.
+  cacheLocally();
+
+  if(!navigator.onLine){
+    isOnline = false;
+    pendingSync = true;
+    updateSyncIndicator();
+    return;
+  }
+
+  try{
+    syncing = true;
+    updateSyncIndicator();
+    await syncStocksToRemote();
+    isOnline = true;
+    syncing = false;
+    updateSyncIndicator();
+  } catch(err){
+    console.error('Failed to save stocks to Supabase — will retry when online', err);
+    syncing = false;
+    pendingSync = true;
+    updateSyncIndicator();
+  }
 }
 
 async function saveOrderHistory(){
-  try{ await window.storage.set('order-history', JSON.stringify(orderHistory), false); }
-  catch(e){ showToast('Could not save order'); }
+  cacheLocally();
+
+  if(!navigator.onLine){
+    isOnline = false;
+    pendingSync = true;
+    updateSyncIndicator();
+    return;
+  }
+
+  try{
+    syncing = true;
+    updateSyncIndicator();
+    await syncOrdersToRemote();
+    isOnline = true;
+    syncing = false;
+    updateSyncIndicator();
+  } catch(err){
+    console.error('Failed to save orders to Supabase — will retry when online', err);
+    syncing = false;
+    pendingSync = true;
+    updateSyncIndicator();
+  }
+}
+
+// Re-push everything once connectivity is confirmed, so any changes made
+// while offline reach Supabase without the user having to do anything.
+async function flushPendingSync(){
+  if(syncing || !navigator.onLine) return;
+  try{
+    syncing = true;
+    updateSyncIndicator();
+    await syncStocksToRemote();
+    await syncOrdersToRemote();
+    pendingSync = false;
+    isOnline = true;
+    showToast('Back online — changes synced');
+  } catch(err){
+    console.error('Retry sync failed, will try again later', err);
+    pendingSync = true;
+  } finally{
+    syncing = false;
+    updateSyncIndicator();
+  }
+}
+
+window.addEventListener('online', ()=>{
+  isOnline = true;
+  updateSyncIndicator();
+  if(pendingSync) flushPendingSync();
+});
+
+window.addEventListener('offline', ()=>{
+  isOnline = false;
+  updateSyncIndicator();
+});
+
+// Fallback in case the browser doesn't fire 'online' reliably (common on mobile)
+setInterval(()=>{
+  if(pendingSync && navigator.onLine && !syncing) flushPendingSync();
+}, 20000);
+
+/* ---------- IMPORT / EXPORT / BACKUP ---------- */
+
+let logoLongPressTimer = null;
+let logoLongPressFired = false;
+const LOGO_LONG_PRESS_MS = 600;
+
+function handleLogoPressStart(){
+  logoLongPressFired = false;
+  clearTimeout(logoLongPressTimer);
+  logoLongPressTimer = setTimeout(()=>{
+    logoLongPressFired = true;
+    if(navigator.vibrate) navigator.vibrate(15);
+    openBackupPanel();
+  }, LOGO_LONG_PRESS_MS);
+}
+
+function handleLogoPressEnd(){
+  clearTimeout(logoLongPressTimer);
+}
+
+function openBackupPanel(){
+  document.getElementById('backupOverlay').classList.add('show');
+}
+
+function closeBackupPanel(){
+  document.getElementById('backupOverlay').classList.remove('show');
+}
+
+function downloadBlob(filename, content, mime){
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=> URL.revokeObjectURL(url), 1000);
+}
+
+function downloadJSON(filename, dataObj){
+  downloadBlob(filename, JSON.stringify(dataObj, null, 2), 'application/json');
+}
+
+function dateStamp(){
+  const d = new Date();
+  const pad = n=> String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+
+function readFileAsText(file){
+  return new Promise((resolve, reject)=>{
+    const reader = new FileReader();
+    reader.onload = ()=> resolve(reader.result);
+    reader.onerror = ()=> reject(reader.error);
+    reader.readAsText(file);
+  });
+}
+
+// ----- Items & suppliers (CSV / Excel) export/import -----
+
+const ITEMS_EXPORT_HEADERS = ['Item Name', 'Unit', 'Supplier Name', 'Supplier Phone'];
+
+function itemsToRows(){
+  return stocks.map(s=> ({
+    name: s.name,
+    unit: s.unit,
+    supplierName: s.supplierName,
+    supplierPhone: s.supplierPhone
+  }));
+}
+
+function csvEscape(v){
+  v = String(v ?? '');
+  if(/[",\r\n]/.test(v)){ v = '"' + v.replace(/"/g, '""') + '"'; }
+  return v;
+}
+
+function itemsToCsv(items){
+  const lines = [ITEMS_EXPORT_HEADERS.map(csvEscape).join(',')];
+  items.forEach(it=>{
+    lines.push([it.name, it.unit, it.supplierName, it.supplierPhone].map(csvEscape).join(','));
+  });
+  return lines.join('\r\n');
+}
+
+// Minimal RFC4180-style CSV parser (handles quoted fields, escaped quotes, commas & newlines inside quotes)
+function parseCSV(text){
+  const rows = [];
+  let row = [];
+  let field = '';
+  let inQuotes = false;
+  for(let i = 0; i < text.length; i++){
+    const c = text[i];
+    if(inQuotes){
+      if(c === '"'){
+        if(text[i + 1] === '"'){ field += '"'; i++; }
+        else { inQuotes = false; }
+      } else {
+        field += c;
+      }
+    } else if(c === '"'){
+      inQuotes = true;
+    } else if(c === ','){
+      row.push(field); field = '';
+    } else if(c === '\n'){
+      row.push(field); rows.push(row); row = []; field = '';
+    } else if(c === '\r'){
+      // skip — paired \n handles the line break
+    } else {
+      field += c;
+    }
+  }
+  if(field.length > 0 || row.length > 0){ row.push(field); rows.push(row); }
+  return rows.filter(r=> !(r.length === 1 && r[0].trim() === ''));
+}
+
+// Turns a table (array of arrays, first row = header) into item objects,
+// matching columns by header name and falling back to column order (A–D)
+// if no recognizable header row is present.
+function rowsToItems(rows){
+  if(!rows || rows.length === 0) return [];
+  const header = rows[0].map(h=> String(h ?? '').trim().toLowerCase());
+  const findCol = names=> header.findIndex(h=> names.includes(h));
+
+  let iName = findCol(['item name', 'item', 'name']);
+  let iUnit = findCol(['unit', 'units']);
+  let iSupName = findCol(['supplier name', 'supplier']);
+  let iSupPhone = findCol(['supplier phone', 'phone', 'phone number', 'whatsapp number', 'whatsapp']);
+
+  let dataRows = rows.slice(1);
+  if(iName === -1 && iUnit === -1 && iSupName === -1 && iSupPhone === -1){
+    // No recognizable header — assume Item Name, Unit, Supplier Name, Supplier Phone column order
+    iName = 0; iUnit = 1; iSupName = 2; iSupPhone = 3;
+    dataRows = rows;
+  }
+
+  return dataRows.map(r=> ({
+    name: String(r[iName] ?? '').trim(),
+    unit: String(r[iUnit] ?? '').trim(),
+    supplierName: String(r[iSupName] ?? '').trim(),
+    supplierPhone: String(r[iSupPhone] ?? '').trim()
+  })).filter(it=> it.name || it.unit || it.supplierName || it.supplierPhone);
+}
+
+async function excelFileToItems(file){
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: 'array' });
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+  return rowsToItems(rows);
+}
+
+function downloadItemsTemplate(){
+  const TEMPLATE_ROWS = 200; // total blank data rows below the header
+
+  const wsData = [
+    ['Item Name', 'Unit', 'Supplier Name', 'Supplier Phone']
+  ];
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+  // From row 3 onward, Supplier Phone auto-fills from any earlier row in this
+  // sheet that already used the same Supplier Name — so once a supplier has
+  // been typed once, Excel's own autocomplete suggests the name again on
+  // later rows, and picking it fills the phone number automatically. If the
+  // supplier name is new, the cell just stays blank for manual entry.
+  for(let r = 3; r <= TEMPLATE_ROWS + 1; r++){
+    ws['D' + r] = {
+      t: 'str',
+      v: '',
+      f: `IFERROR(INDEX($D$2:D${r - 1},MATCH(C${r},$C$2:C${r - 1},0)),"")`
+    };
+  }
+
+  ws['!ref'] = `A1:D${TEMPLATE_ROWS + 1}`;
+  ws['!cols'] = [{ wch: 26 }, { wch: 10 }, { wch: 24 }, { wch: 18 }];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Items');
+  XLSX.writeFile(wb, 'stockline-items-template.xlsx');
+  closeBackupPanel();
+  showToast('Template downloaded — type a supplier once, and later rows will suggest & auto-fill it');
+}
+
+function exportItemsCsv(){
+  const items = itemsToRows();
+  downloadBlob(`stockline-items-suppliers-${dateStamp()}.csv`, itemsToCsv(items), 'text/csv;charset=utf-8;');
+  closeBackupPanel();
+  showToast(`Exported ${items.length} item${items.length === 1 ? '' : 's'} as CSV`);
+}
+
+function exportItemsExcel(){
+  const items = itemsToRows();
+  const ws = XLSX.utils.json_to_sheet(items.map(it=> ({
+    'Item Name': it.name,
+    'Unit': it.unit,
+    'Supplier Name': it.supplierName,
+    'Supplier Phone': it.supplierPhone
+  })));
+  ws['!cols'] = [{ wch: 26 }, { wch: 10 }, { wch: 24 }, { wch: 18 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Items');
+  XLSX.writeFile(wb, `stockline-items-suppliers-${dateStamp()}.xlsx`);
+  closeBackupPanel();
+  showToast(`Exported ${items.length} item${items.length === 1 ? '' : 's'} as Excel`);
+}
+
+// Appends valid, non-duplicate rows to the existing item list. Never removes
+// or overwrites anything already there — a row is only skipped if it's an
+// exact match (name + unit + supplier) of one already in the list, if its
+// item name collides with a different existing item, or if its supplier
+// name is already tied to a different phone number.
+function mergeImportedItems(rawItems){
+  const valid = (rawItems || []).filter(it=>
+    it && it.name && it.unit && it.supplierName && it.supplierPhone
+  );
+
+  if(valid.length === 0){
+    showAppAlert('No valid rows were found in that file. Each row needs an item name, unit, supplier name and supplier phone.', "Import failed");
+    return;
+  }
+
+  const existingSig = new Set(stocks.map(s=>
+    s.name.trim().toLowerCase() + '|' + s.unit.trim().toLowerCase() + '|' + supplierKey(s.supplierName, s.supplierPhone)
+  ));
+  // name (lowercased) -> true, to enforce global item-name uniqueness
+  const existingNames = new Set(stocks.map(s=> s.name.trim().toLowerCase()));
+  // supplier name (lowercased) -> cleaned phone, to enforce one phone per supplier name
+  const existingSupplierPhones = new Map();
+  getSuppliersFrom(stocks).forEach(sup=> existingSupplierPhones.set(sup.name.trim().toLowerCase(), cleanPhone(sup.phone)));
+
+  const caMap = loadCreatedAtMap();
+  let added = 0, skipped = 0, conflicts = 0;
+  valid.forEach(it=>{
+    const nameKey = it.name.trim().toLowerCase();
+    const unitKey = it.unit.trim().toLowerCase();
+    const supNameKey = it.supplierName.trim().toLowerCase();
+    const sig = nameKey + '|' + unitKey + '|' + supplierKey(it.supplierName, it.supplierPhone);
+
+    if(existingSig.has(sig)){ skipped++; return; }
+    if(existingNames.has(nameKey)){ conflicts++; return; }
+    if(existingSupplierPhones.has(supNameKey) && existingSupplierPhones.get(supNameKey) !== cleanPhone(it.supplierPhone)){
+      conflicts++;
+      return;
+    }
+
+    existingSig.add(sig);
+    existingNames.add(nameKey);
+    existingSupplierPhones.set(supNameKey, cleanPhone(it.supplierPhone));
+
+    const newItem = {
+      id: uid(),
+      name: it.name.trim(),
+      unit: it.unit.trim(),
+      supplierName: it.supplierName.trim(),
+      supplierPhone: it.supplierPhone.trim(),
+      createdAt: new Date().toISOString()
+    };
+    stocks.push(newItem);
+    caMap[newItem.id] = newItem.createdAt;
+    added++;
+  });
+
+  if(added > 0){
+    saveCreatedAtMap(caMap);
+    saveStocks();
+  }
+  closeBackupPanel();
+  render();
+
+  const notes = [];
+  if(skipped > 0) notes.push(`${skipped} already in your list`);
+  if(conflicts > 0) notes.push(`${conflicts} skipped — item name or supplier phone conflicts with an existing entry`);
+  showToast(`Added ${added} item${added === 1 ? '' : 's'}${notes.length ? `, ${notes.join(', ')}` : ''} — nothing was deleted`);
+}
+
+async function handleImportItemsSuppliersFile(event){
+  const file = event.target.files[0];
+  event.target.value = '';
+  if(!file) return;
+
+  const fname = file.name.toLowerCase();
+  try{
+    let items;
+    if(fname.endsWith('.csv')){
+      const text = await readFileAsText(file);
+      items = rowsToItems(parseCSV(text));
+    } else if(fname.endsWith('.xlsx') || fname.endsWith('.xls')){
+      items = await excelFileToItems(file);
+    } else {
+      showAppAlert('Please choose a .csv or .xlsx file.', "Import failed");
+      return;
+    }
+    mergeImportedItems(items);
+  } catch(e){
+    console.error('Failed to import items file', e);
+    showAppAlert("That file could not be read. Make sure it's a valid CSV or Excel file.", "Import failed");
+  }
+}
+
+// ----- Full backup export/restore -----
+
+function exportFullBackup(){
+  downloadJSON(`stockline-backup-${dateStamp()}.json`, {
+    type: 'stockline-full-backup',
+    exportedAt: new Date().toISOString(),
+    stocks,
+    orderHistory
+  });
+  closeBackupPanel();
+  showToast('Full backup exported');
+}
+
+async function handleImportFullBackupFile(event){
+  const file = event.target.files[0];
+  event.target.value = '';
+  if(!file) return;
+
+  let parsed;
+  try{
+    const text = await readFileAsText(file);
+    parsed = JSON.parse(text);
+  }catch(e){
+    showAppAlert('That file could not be read as JSON.', "Restore failed");
+    return;
+  }
+
+  if(!parsed || !Array.isArray(parsed.stocks) || !Array.isArray(parsed.orderHistory)){
+    showAppAlert("This file doesn't look like a Stockline full backup.", "Restore failed");
+    return;
+  }
+
+  const rawStocks = parsed.stocks.filter(s=>
+    s && typeof s.name === 'string' && typeof s.unit === 'string' &&
+    typeof s.supplierName === 'string' && typeof s.supplierPhone === 'string'
+  ).map(s=> ({
+    id: s.id || uid(),
+    name: s.name,
+    unit: s.unit,
+    supplierName: s.supplierName,
+    supplierPhone: s.supplierPhone,
+    createdAt: typeof s.createdAt === 'string' ? s.createdAt : new Date().toISOString()
+  }));
+
+  // Enforce the same invariants the Add Item form enforces: item names must
+  // be unique, and a supplier name can't map to two different phone numbers.
+  // Rows violating this (first occurrence wins) are dropped from the restore.
+  const seenNames = new Set();
+  const seenSupplierPhones = new Map();
+  let conflictsDropped = 0;
+  const newStocks = rawStocks.filter(s=>{
+    const nameKey = s.name.trim().toLowerCase();
+    if(seenNames.has(nameKey)){ conflictsDropped++; return false; }
+    const supNameKey = s.supplierName.trim().toLowerCase();
+    if(seenSupplierPhones.has(supNameKey) && seenSupplierPhones.get(supNameKey) !== cleanPhone(s.supplierPhone)){
+      conflictsDropped++;
+      return false;
+    }
+    seenNames.add(nameKey);
+    seenSupplierPhones.set(supNameKey, cleanPhone(s.supplierPhone));
+    return true;
+  });
+
+  const newOrders = parsed.orderHistory.filter(o=>
+    o && typeof o.supplierName === 'string' && typeof o.supplierPhone === 'string' && Array.isArray(o.items)
+  ).map(o=> ({
+    id: o.id || uid(),
+    supplierKey: supplierKey(o.supplierName, o.supplierPhone),
+    supplierName: o.supplierName,
+    supplierPhone: o.supplierPhone,
+    status: o.status || 'completed',
+    items: o.items,
+    date: o.date || new Date().toISOString(),
+    sentDate: o.sentDate || undefined
+  }));
+
+  showAppConfirm({
+    message: `Restore ${newStocks.length} item${newStocks.length === 1 ? '' : 's'} and ${newOrders.length} order${newOrders.length === 1 ? '' : 's'} from this backup? This replaces everything currently in Stockline and can't be undone.${conflictsDropped > 0 ? ` (${conflictsDropped} item${conflictsDropped === 1 ? '' : 's'} in the backup had a duplicate name or a supplier phone conflict and won't be restored.)` : ''}`,
+    confirmLabel: 'Replace all data',
+    danger: true,
+    onConfirm: ()=>{
+      stocks = newStocks;
+      orderHistory = newOrders;
+      const caMap = {};
+      stocks.forEach(s=>{ caMap[s.id] = s.createdAt; });
+      saveCreatedAtMap(caMap);
+      saveStocks();
+      saveOrderHistory();
+      closeBackupPanel();
+      switchTab('order');
+      showToast('Backup restored');
+    }
+  });
 }
 
 function switchTab(tab){
@@ -1114,10 +1954,20 @@ function getSuppliersFrom(list){
   return Array.from(map.values());
 }
 
+function earliestCreatedAt(items){
+  let min = null;
+  items.forEach(it=>{
+    if(it.createdAt && (!min || it.createdAt < min)) min = it.createdAt;
+  });
+  return min || '';
+}
+
 function getSuppliers(){
   let list = getSuppliersFrom(stocks);
   if(suppliersSort === 'az'){
     list.sort((a,b)=> a.name.localeCompare(b.name));
+  } else if(suppliersSort === 'recent'){
+    list.sort((a,b)=> earliestCreatedAt(b.items).localeCompare(earliestCreatedAt(a.items)));
   }
   return list;
 }
@@ -1142,6 +1992,11 @@ function render(){
     return;
   }
 
+  if(addingNewStock || editingStockId){
+    renderStockForm();
+    return;
+  }
+
   if(currentTab === 'order'){
     if(reviewingSupplierKey){ renderReview(); } else { renderOrderPicker(); }
   } else if(currentTab === 'active'){
@@ -1160,8 +2015,6 @@ function render(){
 /* ---------- ORDER TAB (supplier picker + review) ---------- */
 
 function renderOrderPicker(){
-  if(editingStockId || addingNewStock){ renderStockForm(); return; }
-
   let html = `
     <div class="section-label"><span class="left"><h2>Add to order</h2></span></div>
     <div class="card">
@@ -1302,13 +2155,14 @@ function renderStockForm(){
     <p class="section-sub" style="margin:-2px 0 12px 0;">⚠ Item names must be unique, and a supplier name must always use the same phone number.</p>
     <div class="card">
       <label for="f-name">Item name</label>
-      <input id="f-name" placeholder="e.g. Basmati rice, 25kg bag" autocomplete="off" value="${editing ? escapeHtml(editing.name) : ''}">
+      <input id="f-name" autocomplete="off" value="${editing ? escapeHtml(editing.name) : ''}">
 
       <label for="f-unit">Unit</label>
-      <input id="f-unit" placeholder="e.g. bag, kg" autocomplete="off" maxlength="4" value="${editing ? escapeHtml(editing.unit) : ''}">
+      <input id="f-unit" autocomplete="off" maxlength="4" value="${editing ? escapeHtml(editing.unit) : ''}"
+        oninput="sanitizeUnitField(this)">
 
       <label for="f-sname">Supplier name</label>
-      <input id="f-sname" placeholder="e.g. Cash & Carry Ltd" autocomplete="off"
+      <input id="f-sname" autocomplete="off"
         value="${editing ? escapeHtml(editing.supplierName) : ''}"
         oninput="renderSupplierSuggestions(this.value)"
         onfocus="renderSupplierSuggestions(this.value)"
@@ -1316,7 +2170,7 @@ function renderStockForm(){
       <div id="supplierSuggestWrap"></div>
 
       <label for="f-sphone">Supplier phone (WhatsApp number)</label>
-      <input id="f-sphone" placeholder="e.g. +447700900123" autocomplete="off" inputmode="tel"
+      <input id="f-sphone" autocomplete="off" inputmode="tel"
         value="${editing ? escapeHtml(editing.supplierPhone) : ''}"
         oninput="sanitizePhoneField(this)">
 
@@ -1326,6 +2180,15 @@ function renderStockForm(){
   `;
 
   mainEl.innerHTML = html;
+}
+
+function sanitizeUnitField(input){
+  const cursor = input.selectionStart;
+  const before = input.value;
+  input.value = input.value.replace(/[^a-zA-Z]/g, '');
+  const removed = before.length - input.value.length;
+  const pos = Math.max(0, (cursor ?? input.value.length) - removed);
+  input.setSelectionRange(pos, pos);
 }
 
 function sanitizePhoneField(input){
@@ -1538,8 +2401,18 @@ function createOrder(key){
 
 /* ---------- ACTIVE / COMPLETED TABS ---------- */
 
-function renderOrdersList(status){
+function getFilteredOrders(status){
   const list = orderHistory.filter(o=> o.status === status).slice().reverse();
+  const q = (ordersSearch[status] || '').trim().toLowerCase();
+  if(!q) return list;
+  return list.filter(o=>
+    o.supplierName.toLowerCase().includes(q) ||
+    o.supplierPhone.toLowerCase().includes(q)
+  );
+}
+
+function renderOrdersList(status){
+  const allCount = orderHistory.filter(o=> o.status === status).length;
   const label = status === 'active' ? 'Active orders' : 'Completed orders';
   const inSelection = selectionMode && selectionTab === status;
 
@@ -1555,15 +2428,42 @@ function renderOrdersList(status){
       </div>
     `;
   } else {
-    html += `<div class="section-label"><span class="left"><h2>${label} (${list.length})</h2></span></div>`;
+    html += `<div class="section-label"><span class="left"><h2>${label} (${allCount})</h2></span></div>`;
   }
 
-  if(list.length === 0){
+  if(allCount > 0){
+    html += `
+      <div class="search-wrap">
+        <span class="sicon">⌕</span>
+        <input id="f-orders-search" placeholder="Search by supplier name or phone" value="${escapeHtml(ordersSearch[status])}" oninput="ordersSearch['${status}']=this.value; renderOrdersListItems('${status}')">
+      </div>
+    `;
+  }
+
+  html += `<div id="ordersListWrap"></div>`;
+
+  mainEl.innerHTML = html;
+  renderOrdersListItems(status);
+  positionSelectBar();
+}
+
+function renderOrdersListItems(status){
+  const wrap = document.getElementById('ordersListWrap');
+  if(!wrap) return;
+
+  const allCount = orderHistory.filter(o=> o.status === status).length;
+  const inSelection = selectionMode && selectionTab === status;
+  const list = getFilteredOrders(status);
+
+  let html = '';
+  if(allCount === 0){
     if(status === 'active'){
       html += `<div class="empty"><div class="glyph">·&nbsp;·&nbsp;·</div><p>No active orders.<br>Create an order from the Order tab — it'll wait here until you send it via WhatsApp.</p></div>`;
     } else {
       html += `<div class="empty"><div class="glyph">·&nbsp;·&nbsp;·</div><p>No completed orders yet.<br>Mark an active order as completed once stock arrives.</p></div>`;
     }
+  } else if(list.length === 0){
+    html += `<div class="empty"><div class="glyph">⌕</div><p>No orders match "${escapeHtml(ordersSearch[status])}".</p></div>`;
   } else {
     list.forEach(order=>{
       const dateStr = (status === 'completed' && order.sentDate) ? formatDateTime(order.sentDate) : formatDateTime(order.date);
@@ -1590,8 +2490,7 @@ function renderOrdersList(status){
     });
   }
 
-  mainEl.innerHTML = html;
-  positionSelectBar();
+  wrap.innerHTML = html;
 }
 
 function positionSelectBar(){
@@ -1904,6 +2803,8 @@ function getFilteredSortedStocks(){
   }
   if(stocksSort === 'az'){
     list.sort((a,b)=> a.name.localeCompare(b.name));
+  } else if(stocksSort === 'recent'){
+    list.sort((a,b)=> (b.createdAt || '').localeCompare(a.createdAt || ''));
   }
   return list;
 }
@@ -2074,17 +2975,25 @@ function submitStockForm(){
     closeStockForm();
     showToast('Changes saved');
   } else {
-    const newItem = { id: uid(), name, unit, supplierName: sname, supplierPhone: sphone };
+    const newItem = { id: uid(), name, unit, supplierName: sname, supplierPhone: sphone, createdAt: new Date().toISOString() };
     stocks.push(newItem);
+    const caMap = loadCreatedAtMap();
+    caMap[newItem.id] = newItem.createdAt;
+    saveCreatedAtMap(caMap);
     saveStocks();
     addingNewStock = false;
-    orderSearchQuery = newItem.name;
-    orderSelectedItemId = newItem.id;
-    orderQty = '';
-    render();
-    const qtyInput = document.getElementById('f-order-qty');
-    if(qtyInput) qtyInput.focus();
-    showToast('Added to order book — enter a quantity to order it');
+    if(currentTab === 'order'){
+      orderSearchQuery = newItem.name;
+      orderSelectedItemId = newItem.id;
+      orderQty = '';
+      render();
+      const qtyInput = document.getElementById('f-order-qty');
+      if(qtyInput) qtyInput.focus();
+      showToast('Added to order book — enter a quantity to order it');
+    } else {
+      render();
+      showToast(`"${newItem.name}" added to your order book`);
+    }
   }
 }
 
