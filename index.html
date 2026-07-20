@@ -4,6 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
 <title>Stockline — Order Book</title>
+
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1B2430">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+
+<!-- iOS home-screen support (Safari ignores manifest.json for these) -->
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Stockline">
+<link rel="apple-touch-icon" href="icon-192.png">
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -112,8 +124,21 @@
     color:#9AA5B1;
   }
 
-  main{ flex:1; padding:18px 16px 96px 16px; touch-action:pan-y; }
-  main.tab-anim{ animation:tabFade .18s ease; }
+  main{ flex:1; padding:18px 16px 96px 16px; touch-action:pan-y; will-change:transform; }
+  main:not(.dragging){ transition:transform .28s cubic-bezier(.22,.61,.36,1); }
+  main.dragging{ transition:none; }
+
+  main.tab-anim-next{ animation:tabSlideFromRight .28s cubic-bezier(.22,.61,.36,1); }
+  main.tab-anim-prev{ animation:tabSlideFromLeft .28s cubic-bezier(.22,.61,.36,1); }
+  main.tab-anim-fade{ animation:tabFade .2s ease; }
+  @keyframes tabSlideFromRight{
+    from{ opacity:0; transform:translateX(28px); }
+    to{ opacity:1; transform:translateX(0); }
+  }
+  @keyframes tabSlideFromLeft{
+    from{ opacity:0; transform:translateX(-28px); }
+    to{ opacity:1; transform:translateX(0); }
+  }
   @keyframes tabFade{
     from{ opacity:0; transform:translateY(6px); }
     to{ opacity:1; transform:translateY(0); }
@@ -759,6 +784,42 @@
   }
   .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 
+  .install-banner{
+    display:none;
+    align-items:center;
+    gap:10px;
+    padding:10px 16px;
+    background:#FBF3E3;
+    border-bottom:1px solid #E7D9B8;
+    color:var(--ink);
+  }
+  .install-banner.show{ display:flex; }
+  .install-banner .ib-icon{ color:var(--amber); flex-shrink:0; display:flex; }
+  .install-banner .ib-text{ flex:1; font-family:'IBM Plex Sans', sans-serif; font-size:12.5px; line-height:1.3; }
+  .install-banner .ib-install{
+    background:var(--ink);
+    color:var(--paper);
+    border:none;
+    border-radius:6px;
+    padding:7px 14px;
+    font-family:'Space Grotesk',sans-serif;
+    font-weight:600;
+    font-size:12.5px;
+    cursor:pointer;
+    white-space:nowrap;
+    flex-shrink:0;
+  }
+  .install-banner .ib-dismiss{
+    background:transparent;
+    border:none;
+    color:#8890A0;
+    font-size:15px;
+    cursor:pointer;
+    padding:4px 2px;
+    line-height:1;
+    flex-shrink:0;
+  }
+
   /* ---------- DESKTOP LAYOUT ---------- */
   /* Below 768px this stays a single mobile-style column with a fixed bottom
      tab bar. Above it, the tab bar moves into the normal document flow right
@@ -809,8 +870,8 @@
 <div class="app">
   <header class="top">
     <div class="brand"
-      onmousedown="handleLogoPressStart()" onmouseup="handleLogoPressEnd()" onmouseleave="handleLogoPressEnd()"
-      ontouchstart="handleLogoPressStart()" ontouchend="handleLogoPressEnd()" ontouchcancel="handleLogoPressEnd()"
+      onmousedown="handleLogoPressStart(event)" onmouseup="handleLogoPressEnd(event)" onmouseleave="handleLogoPressEnd(event)"
+      ontouchstart="handleLogoPressStart(event)" ontouchend="handleLogoPressEnd(event)" ontouchcancel="handleLogoPressEnd(event)"
       oncontextmenu="return false">
       <h1>Stock<span class="mark">line</span></h1>
       <span class="sync-status" id="syncStatus"></span>
@@ -821,6 +882,15 @@
       </button>
     </div>
   </header>
+
+  <div class="install-banner" id="installBanner">
+    <span class="ib-icon">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="M7 10l5 5 5-5"/><path d="M5 20h14"/></svg>
+    </span>
+    <span class="ib-text">Install Stockline for quick, one-tap access</span>
+    <button class="ib-install" onclick="installApp()">Install</button>
+    <button class="ib-dismiss" onclick="dismissInstallBanner()" title="Dismiss">✕</button>
+  </div>
 
   <main id="main"></main>
 
@@ -855,7 +925,7 @@
   <div class="modal-card">
     <div class="modal-title" id="modalTitle"></div>
     <div class="modal-unit" id="modalUnit"></div>
-    <input class="qty-input" id="modalQtyInput" type="number" min="0" inputmode="numeric" placeholder="0">
+    <input class="qty-input" id="modalQtyInput" type="number" min="0" inputmode="numeric" placeholder="0" onfocus="this.select()" onclick="this.select()">
     <div class="modal-actions">
       <button class="ghost" onclick="closeAddModal()">Cancel</button>
       <button class="primary" onclick="confirmAddToOrder()">＋ Add to order</button>
@@ -975,15 +1045,129 @@ function isOverlayOpen(){
          (backupOverlay && backupOverlay.classList.contains('show'));
 }
 
+/* ---------- BACK GESTURE GUARD (edge-swipe / hardware back) ---------- */
+// A phone's edge-swipe-back gesture (or a browser/hardware back button) is
+// handled by the OS/browser before it ever reaches our touch handlers, so
+// it can't be caught the way in-app swipes are. The standard workaround is
+// to keep an extra dummy entry on top of the browser history stack: each
+// back gesture then fires a `popstate` we CAN react to, instead of the
+// browser leaving the page outright.
+//
+// Behavior: the first back gesture closes whatever's open (a modal,
+// a selection, a nested view, a non-Order tab) and lands on the Order tab.
+// A second back gesture — with nothing left to close and already on Order —
+// shows a "swipe again to exit" toast and arms a short window; a further
+// back gesture inside that window is allowed to actually leave the app.
+
+let backGuardArmed = false;
+let backGuardTimer = null;
+const BACK_GUARD_WINDOW_MS = 2200;
+
+function pushBackGuard(){
+  try{ history.pushState({ stocklineGuard: true }, ''); }catch(e){ /* ignore */ }
+}
+
+function armExitGuard(){
+  backGuardArmed = true;
+  clearTimeout(backGuardTimer);
+  backGuardTimer = setTimeout(()=>{ backGuardArmed = false; }, BACK_GUARD_WINDOW_MS);
+}
+
+function closeAnyOverlay(){
+  const modal = document.getElementById('modalOverlay');
+  const backupOverlay = document.getElementById('backupOverlay');
+  const confirmOverlay = document.getElementById('appConfirmOverlay');
+  if(modal && modal.classList.contains('show')){ closeAddModal(); return true; }
+  if(backupOverlay && backupOverlay.classList.contains('show')){ closeBackupPanel(); return true; }
+  if(confirmOverlay && confirmOverlay.classList.contains('show')){
+    const cancelBtn = document.getElementById('appConfirmCancelBtn');
+    if(cancelBtn){ cancelBtn.click(); } else { confirmOverlay.classList.remove('show'); }
+    return true;
+  }
+  return false;
+}
+
+function cancelAnySelection(){
+  if(selectionMode){ cancelSelection(); return true; }
+  if(stockSelectionMode){ cancelStockSelection(); return true; }
+  if(supplierSelectionMode){ cancelSupplierSelection(); return true; }
+  return false;
+}
+
+window.addEventListener('popstate', ()=>{
+  if(closeAnyOverlay()){ pushBackGuard(); return; }
+  if(cancelAnySelection()){ pushBackGuard(); return; }
+
+  const closer = getNestedViewCloser();
+  if(closer){ closer(); pushBackGuard(); return; }
+
+  if(currentTab !== 'order'){ switchTab('order'); pushBackGuard(); return; }
+
+  // Already on the Order tab with nothing open — this is the "real" exit attempt.
+  if(backGuardArmed){
+    history.back(); // let a genuine second gesture actually leave
+    return;
+  }
+  showToast('Swipe back again to exit');
+  if(navigator.vibrate) navigator.vibrate(15);
+  armExitGuard();
+  pushBackGuard();
+});
+
+pushBackGuard();
+
+let swipeDragging = false;
+
 function handleSwipeStart(e){
   const t = e.touches[0];
   swipeStartX = t.clientX;
   swipeStartY = t.clientY;
   swipeStartTime = Date.now();
+  swipeDragging = false;
+}
+
+function handleSwipeMove(e){
+  if(isSelecting() || isOverlayOpen()){ return; }
+
+  const t = e.touches[0];
+  const dx = t.clientX - swipeStartX;
+  const dy = t.clientY - swipeStartY;
+
+  if(!swipeDragging){
+    // Only commit to a horizontal drag once the gesture is clearly more
+    // sideways than vertical, so normal up/down scrolling isn't hijacked.
+    if(Math.abs(dx) < 12 || Math.abs(dy) > Math.abs(dx)) return;
+    if(getNestedViewCloser() && dx < 0) return; // nested views only drag-close via a rightward swipe
+    swipeDragging = true;
+    mainEl.classList.add('dragging');
+  }
+
+  const idx = TABS.indexOf(currentTab);
+  const atStart = idx === 0 && !getNestedViewCloser();
+  const atEnd = idx === TABS.length - 1;
+  let follow = dx;
+  if((dx > 0 && atStart) || (dx < 0 && atEnd)){
+    follow = dx * 0.3; // rubber-band resistance at the ends, nothing to swipe to
+  }
+  follow = Math.max(-130, Math.min(130, follow));
+  mainEl.style.transform = `translateX(${follow}px)`;
 }
 
 function handleSwipeEnd(e){
-  if(isSelecting() || isOverlayOpen()) return;
+  const wasDragging = swipeDragging;
+  swipeDragging = false;
+  mainEl.classList.remove('dragging');
+
+  if(isSelecting() || isOverlayOpen()){
+    mainEl.style.transform = '';
+    return;
+  }
+  if(!wasDragging){
+    mainEl.style.transform = '';
+    return;
+  }
+
+  mainEl.style.transform = ''; // eases back to 0 via the CSS transition unless we swap content below
 
   const t = e.changedTouches[0];
   const dx = t.clientX - swipeStartX;
@@ -1009,6 +1193,7 @@ function handleSwipeEnd(e){
 }
 
 mainEl.addEventListener('touchstart', handleSwipeStart, { passive:true });
+mainEl.addEventListener('touchmove', handleSwipeMove, { passive:true });
 mainEl.addEventListener('touchend', handleSwipeEnd, { passive:true });
 
 function showToast(msg){
@@ -1110,7 +1295,7 @@ function showDuplicateItemModal(order, item, existingLine, newQty){
       <p class="confirm-msg">"${escapeHtml(item.name)}" is already in the active order for ${escapeHtml(item.supplierName)}, with a quantity of ${existingLine.qty} ${escapeHtml(item.unit)}. Update it to the new quantity?</p>
       <div class="confirm-qty-row">
         <label for="dupQtyInput">${escapeHtml(item.name)} (${escapeHtml(item.unit)})</label>
-        <input type="number" min="0" inputmode="numeric" id="dupQtyInput" value="${prefill}">
+        <input type="number" min="0" inputmode="numeric" id="dupQtyInput" value="${prefill}" onfocus="this.select()" onclick="this.select()">
       </div>
       <div class="confirm-actions">
         <button class="confirm-cancel" id="appConfirmCancelBtn">Cancel</button>
@@ -1151,7 +1336,7 @@ function showDuplicateBatchModal(order, duplicates){
   const rowsHtml = duplicates.map((d, i)=> `
     <div class="confirm-qty-row">
       <label for="dupBatchQty${i}">${escapeHtml(d.item.name)} (${escapeHtml(d.item.unit)}) — currently ${d.existingLine.qty}</label>
-      <input type="number" min="0" inputmode="numeric" id="dupBatchQty${i}" value="${d.existingLine.qty}">
+      <input type="number" min="0" inputmode="numeric" id="dupBatchQty${i}" value="${d.existingLine.qty}" onfocus="this.select()" onclick="this.select()">
     </div>
   `).join('');
 
@@ -1510,9 +1695,15 @@ setInterval(()=>{
 
 let logoLongPressTimer = null;
 let logoLongPressFired = false;
+let logoTouchHandled = false; // true briefly after a real touch, to ignore the browser's synthetic mouse echo
 const LOGO_LONG_PRESS_MS = 600;
 
-function handleLogoPressStart(){
+function handleLogoPressStart(e){
+  if(e && e.type === 'mousedown' && logoTouchHandled){
+    return; // this is just the synthetic mouse echo of a touch we already handled
+  }
+  if(e && e.type === 'touchstart'){ logoTouchHandled = true; }
+
   logoLongPressFired = false;
   clearTimeout(logoLongPressTimer);
   logoLongPressTimer = setTimeout(()=>{
@@ -1522,8 +1713,13 @@ function handleLogoPressStart(){
   }, LOGO_LONG_PRESS_MS);
 }
 
-function handleLogoPressEnd(){
+function handleLogoPressEnd(e){
   clearTimeout(logoLongPressTimer);
+  if(e && (e.type === 'touchend' || e.type === 'touchcancel')){
+    // Keep ignoring mouse events for a moment — the synthetic echo lands
+    // almost immediately after touchend, then real mouse use can resume.
+    setTimeout(()=>{ logoTouchHandled = false; }, 700);
+  }
 }
 
 function openBackupPanel(){
@@ -1902,6 +2098,10 @@ async function handleImportFullBackupFile(event){
 }
 
 function switchTab(tab){
+  clearTimeout(longPressTimer);
+  longPressFired = false;
+  const fromIdx = TABS.indexOf(currentTab);
+  const toIdx = TABS.indexOf(tab);
   currentTab = tab;
   reviewingSupplierKey = null;
   editingStockId = null;
@@ -1921,9 +2121,13 @@ function switchTab(tab){
     document.getElementById('tab' + capitalize(t) + 'Btn').classList.toggle('active', t === tab);
   });
   render();
-  mainEl.classList.remove('tab-anim');
+  mainEl.classList.remove('dragging');
+  mainEl.style.transform = '';
+  mainEl.classList.remove('tab-anim-next', 'tab-anim-prev', 'tab-anim-fade');
   void mainEl.offsetWidth;
-  mainEl.classList.add('tab-anim');
+  if(toIdx > fromIdx){ mainEl.classList.add('tab-anim-next'); }
+  else if(toIdx < fromIdx){ mainEl.classList.add('tab-anim-prev'); }
+  else { mainEl.classList.add('tab-anim-fade'); }
 }
 
 function capitalize(s){ return s.charAt(0).toUpperCase() + s.slice(1); }
@@ -2030,7 +2234,7 @@ function renderOrderPicker(){
 
       <label for="f-order-qty">Quantity to order</label>
       <input id="f-order-qty" type="number" min="0" inputmode="numeric" placeholder="0"
-        value="${escapeHtml(orderQty)}" oninput="orderQty=this.value">
+        value="${escapeHtml(orderQty)}" oninput="orderQty=this.value" onfocus="this.select()" onclick="this.select()">
 
       <button class="send-btn" id="orderAddBtn" onclick="addSearchedItemToOrder()" ${orderSelectedItemId ? '' : 'disabled'}>＋ Add to order</button>
     </div>
@@ -2133,12 +2337,16 @@ function addSearchedItemToOrder(){
 }
 
 function openAddStockPage(){
+  clearTimeout(longPressTimer);
+  longPressFired = false;
   addingNewStock = true;
   editingStockId = null;
   render();
 }
 
 function closeStockForm(){
+  clearTimeout(longPressTimer);
+  longPressFired = false;
   addingNewStock = false;
   editingStockId = null;
   render();
@@ -2342,7 +2550,7 @@ function renderReviewItems(){
         </div>
         <input class="qty" type="number" min="0" inputmode="numeric" placeholder="0"
           value="${reviewQty[item.id] || ''}"
-          oninput="reviewQty['${item.id}'] = this.value">
+          oninput="reviewQty['${item.id}'] = this.value" onfocus="this.select()" onclick="this.select()">
       </div>
     `;
   });
@@ -2597,6 +2805,8 @@ function deleteOrder(orderId){
 /* ---------- ORDER DETAIL (view/edit items + send via WhatsApp) ---------- */
 
 function openOrderDetail(orderId){
+  clearTimeout(longPressTimer);
+  longPressFired = false;
   viewingOrderId = orderId;
   orderDetailSearch = '';
   render();
@@ -2673,7 +2883,7 @@ function renderOrderDetailItems(){
             <div class="qunit">unit: ${escapeHtml(li.unit)}</div>
           </div>
           <input class="qty" type="number" min="0" inputmode="numeric" value="${li.qty}"
-            oninput="updateOrderItemQty(${i}, this.value)">
+            oninput="updateOrderItemQty(${i}, this.value)" onfocus="this.select()" onclick="this.select()">
           <button class="icon-btn danger" title="Remove" onclick="removeOrderItem(${i})">✕</button>
         </div>
       `;
@@ -2998,7 +3208,10 @@ function submitStockForm(){
 }
 
 function startEditStock(id){
-  switchTab('order');
+  clearTimeout(longPressTimer);
+  longPressFired = false;
+  stockSelectionMode = false;
+  selectedStockIds = new Set();
   editingStockId = id;
   addingNewStock = false;
   render();
@@ -3215,6 +3428,8 @@ function deleteSelectedSuppliers(){
 }
 
 function viewSupplierStocks(key){
+  clearTimeout(longPressTimer);
+  longPressFired = false;
   supplierStocksViewKey = key;
   render();
 }
@@ -3427,6 +3642,50 @@ function escapeHtml(str){
 TABS.forEach(t=> document.getElementById('tab' + capitalize(t) + 'Btn').classList.toggle('active', t === currentTab));
 window.addEventListener('resize', positionSelectBar);
 loadData();
+
+/* ---------- PWA: INSTALL PROMPT ---------- */
+const INSTALL_DISMISS_KEY = 'stockline_install_dismissed';
+let deferredInstallPrompt = null;
+
+function isStandaloneDisplay(){
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+
+window.addEventListener('beforeinstallprompt', (e)=>{
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  if(!localStorage.getItem(INSTALL_DISMISS_KEY) && !isStandaloneDisplay()){
+    document.getElementById('installBanner').classList.add('show');
+  }
+});
+
+window.addEventListener('appinstalled', ()=>{
+  deferredInstallPrompt = null;
+  document.getElementById('installBanner').classList.remove('show');
+  showToast('Stockline installed');
+});
+
+async function installApp(){
+  if(!deferredInstallPrompt) return;
+  document.getElementById('installBanner').classList.remove('show');
+  deferredInstallPrompt.prompt();
+  try{ await deferredInstallPrompt.userChoice; }catch(e){ /* ignore */ }
+  deferredInstallPrompt = null;
+}
+
+function dismissInstallBanner(){
+  document.getElementById('installBanner').classList.remove('show');
+  try{ localStorage.setItem(INSTALL_DISMISS_KEY, '1'); }catch(e){ /* ignore */ }
+}
+
+/* ---------- PWA SERVICE WORKER ---------- */
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('service-worker.js').catch(err=>{
+      console.error('Service worker registration failed', err);
+    });
+  });
+}
 </script>
 </body>
 </html>
