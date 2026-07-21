@@ -1063,9 +1063,9 @@ const SWIPE_ANIMATION_ENABLED = true; // debug flag no longer needed — animati
 let swipeStartX = 0;
 let swipeStartY = 0;
 let swipeStartTime = 0;
-const SWIPE_MIN_DISTANCE = 55;
+const SWIPE_MIN_DISTANCE = 55; // floor, in case the container is ever very narrow
 const SWIPE_MAX_VERTICAL = 70;
-const SWIPE_MAX_TIME = 600;
+const SWIPE_COMMIT_FRACTION = 0.4; // swipe must cross ~40% of the screen width to commit to a page change
 
 function isSelecting(){
   return !!(stockSelectionMode || supplierSelectionMode || selectionMode);
@@ -1206,7 +1206,7 @@ function handleSwipeMove(e){
   const atEnd = idx === TABS.length - 1;
   let follow = dx;
   if((dx > 0 && atStart) || (dx < 0 && atEnd)){
-    follow = dx * 0.3; // rubber-band resistance at the ends, nothing to swipe to
+    follow = 0; // nothing to swipe to at the first/last tab — don't move the page at all
   }
   // Track the finger 1:1 for a normal swipe distance so the content never
   // lags behind the touch point (a hard clamp here is what read as "slow").
@@ -1255,10 +1255,14 @@ function handleSwipeEnd(e){
   const t = e.changedTouches[0];
   const dx = t.clientX - swipeStartX;
   const dy = t.clientY - swipeStartY;
-  const dt = Date.now() - swipeStartTime;
 
-  if(dt > SWIPE_MAX_TIME) return;
-  if(Math.abs(dx) < SWIPE_MIN_DISTANCE) return;
+  // Only commit to a page change once the swipe has crossed most of the
+  // screen — a partial or hesitant drag should just snap back to where it
+  // was, not flip the page. (Speed no longer matters: a full-width drag,
+  // fast or slow, is deliberate either way.)
+  const containerWidth = mainEl.offsetWidth || window.innerWidth;
+  const commitDistance = Math.max(SWIPE_MIN_DISTANCE, containerWidth * SWIPE_COMMIT_FRACTION);
+  if(Math.abs(dx) < commitDistance) return;
   if(Math.abs(dy) > SWIPE_MAX_VERTICAL) return;
 
   const closer = getNestedViewCloser();
