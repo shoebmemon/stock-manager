@@ -1063,9 +1063,8 @@ const SWIPE_ANIMATION_ENABLED = true; // debug flag no longer needed — animati
 let swipeStartX = 0;
 let swipeStartY = 0;
 let swipeStartTime = 0;
-const SWIPE_MIN_DISTANCE = 55; // floor, in case the container is ever very narrow
+const SWIPE_MIN_DISTANCE = 60;
 const SWIPE_MAX_VERTICAL = 70;
-const SWIPE_COMMIT_FRACTION = 0.4; // swipe must cross ~40% of the screen width to commit to a page change
 
 function isSelecting(){
   return !!(stockSelectionMode || supplierSelectionMode || selectionMode);
@@ -1161,8 +1160,6 @@ window.addEventListener('popstate', ()=>{
 pushBackGuard();
 
 let swipeDragging = false;
-let swipeRafId = null;
-let pendingFollow = null;
 
 function handleSwipeStart(e){
   const t = e.touches[0];
@@ -1170,14 +1167,6 @@ function handleSwipeStart(e){
   swipeStartY = t.clientY;
   swipeStartTime = Date.now();
   swipeDragging = false;
-  if(swipeRafId){ cancelAnimationFrame(swipeRafId); swipeRafId = null; }
-}
-
-function applyPendingFollow(){
-  swipeRafId = null;
-  if(pendingFollow === null) return;
-  mainEl.style.transform = `translate3d(${pendingFollow}px,0,0)`;
-  pendingFollow = null;
 }
 
 function handleSwipeMove(e){
@@ -1193,76 +1182,36 @@ function handleSwipeMove(e){
     if(Math.abs(dx) < 12 || Math.abs(dy) > Math.abs(dx)) return;
     if(getNestedViewCloser() && dx < 0) return; // nested views only drag-close via a rightward swipe
     swipeDragging = true;
-    mainEl.classList.add('dragging');
   }
 
   // We've committed to handling this gesture ourselves — tell the browser
   // so it doesn't also try to interpret it (which otherwise leaves its
   // touch/click state machine half-engaged and can eat the very next tap).
+  // Note: deliberately no visual tracking here — the page stays put during
+  // the drag and only animates once the swipe actually commits, in
+  // handleSwipeEnd, via the existing slide-in keyframes.
   if(e.cancelable) e.preventDefault();
-
-  const idx = TABS.indexOf(currentTab);
-  const atStart = idx === 0 && !getNestedViewCloser();
-  const atEnd = idx === TABS.length - 1;
-  let follow = dx;
-  if((dx > 0 && atStart) || (dx < 0 && atEnd)){
-    follow = 0; // nothing to swipe to at the first/last tab — don't move the page at all
-  }
-  // Track the finger 1:1 for a normal swipe distance so the content never
-  // lags behind the touch point (a hard clamp here is what read as "slow").
-  // Only apply gentle diminishing-returns resistance past that, instead of
-  // a hard stop, so very long drags still feel connected to the finger.
-  const TRACK_1_1 = 140;
-  if(Math.abs(follow) > TRACK_1_1){
-    const extra = Math.abs(follow) - TRACK_1_1;
-    follow = Math.sign(follow) * (TRACK_1_1 + extra * 0.28);
-  }
-
-  // Touch fires faster than the screen can paint on a lot of devices — only
-  // ever queue one style write per animation frame instead of one per event,
-  // which is what was making the drag feel laggy/stuttery.
-  if(SWIPE_ANIMATION_ENABLED){
-    pendingFollow = follow;
-    if(swipeRafId === null){
-      swipeRafId = requestAnimationFrame(applyPendingFollow);
-    }
-  }
 }
 
 function handleSwipeEnd(e){
   const wasDragging = swipeDragging;
   swipeDragging = false;
-  mainEl.classList.remove('dragging');
 
-  if(swipeRafId){ cancelAnimationFrame(swipeRafId); swipeRafId = null; }
-  pendingFollow = null;
-
-  if(isSelecting() || isOverlayOpen()){
-    mainEl.style.transform = '';
-    return;
-  }
-  if(!wasDragging){
-    mainEl.style.transform = '';
-    return;
-  }
+  if(isSelecting() || isOverlayOpen()) return;
+  if(!wasDragging) return;
 
   // This was a real drag we handled ourselves — prevent the browser from
   // synthesizing a trailing click for it.
   if(e.cancelable) e.preventDefault();
 
-  mainEl.style.transform = ''; // eases back to 0 via the CSS transition unless we swap content below
-
   const t = e.changedTouches[0];
   const dx = t.clientX - swipeStartX;
   const dy = t.clientY - swipeStartY;
 
-  // Only commit to a page change once the swipe has crossed most of the
-  // screen — a partial or hesitant drag should just snap back to where it
-  // was, not flip the page. (Speed no longer matters: a full-width drag,
-  // fast or slow, is deliberate either way.)
-  const containerWidth = mainEl.offsetWidth || window.innerWidth;
-  const commitDistance = Math.max(SWIPE_MIN_DISTANCE, containerWidth * SWIPE_COMMIT_FRACTION);
-  if(Math.abs(dx) < commitDistance) return;
+  // Nothing was shown during the drag, so a swipe that doesn't clear this
+  // distance just does nothing at all — no snap-back, no partial motion.
+  // Only a swipe that actually completes triggers the page-change animation.
+  if(Math.abs(dx) < SWIPE_MIN_DISTANCE) return;
   if(Math.abs(dy) > SWIPE_MAX_VERTICAL) return;
 
   const closer = getNestedViewCloser();
