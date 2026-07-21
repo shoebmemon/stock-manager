@@ -547,7 +547,19 @@
   .qty-row:last-child{ border-bottom:none; }
   .qty-row .qinfo{ flex:1; min-width:0; }
   .qty-row .qname{ font-weight:600; font-size:13.5px; line-height:1.3; }
-  .qty-row .qunit{ font-family:'IBM Plex Mono', monospace; font-size:10.5px; color:var(--slate); margin-top:1px; }
+  .qty-row .qunit{
+    display:inline-block;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:10px;
+    font-weight:600;
+    letter-spacing:0.4px;
+    text-transform:uppercase;
+    color:var(--amber-deep);
+    background:#F3E4C6;
+    border-radius:20px;
+    padding:2px 8px;
+    margin-top:3px;
+  }
   .qty-row input.qty{ width:54px; text-align:center; padding:6px 3px; font-family:'IBM Plex Mono', monospace; font-weight:600; }
   .send-btn{
     width:100%;
@@ -756,6 +768,17 @@
   }
   .modal-title{ font-family:'Space Grotesk', sans-serif; font-weight:600; font-size:16px; }
   .modal-unit{ font-family:'IBM Plex Mono', monospace; font-size:11.5px; color:var(--slate); margin-top:2px; }
+  #modalUnit{
+    display:inline-block;
+    font-weight:600;
+    letter-spacing:0.4px;
+    text-transform:uppercase;
+    color:var(--amber-deep);
+    background:#F3E4C6;
+    border-radius:20px;
+    padding:3px 9px;
+    margin-top:6px;
+  }
   .modal-card input.qty-input{
     width:100%;
     text-align:left;
@@ -835,6 +858,9 @@
     line-height:1;
     flex-shrink:0;
   }
+  .update-banner{ background:#E9F3ED; border-bottom:1px solid #CCE3D6; }
+  .update-banner .ib-icon{ color:var(--whatsapp); }
+  .update-banner .ib-install{ background:var(--whatsapp); }
 
   /* ---------- DESKTOP LAYOUT ---------- */
   /* Below 768px this stays a single mobile-style column with a fixed bottom
@@ -907,6 +933,14 @@
     <span class="ib-text">Install Stockline for quick, one-tap access</span>
     <button class="ib-install" onclick="installApp()">Install</button>
     <button class="ib-dismiss" onclick="dismissInstallBanner()" title="Dismiss">✕</button>
+  </div>
+
+  <div class="install-banner update-banner" id="updateBanner">
+    <span class="ib-icon">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7"/><polyline points="21 3 21 9 15 9"/></svg>
+    </span>
+    <span class="ib-text">A new version of Stockline is ready</span>
+    <button class="ib-install" onclick="applyAppUpdate()">Refresh</button>
   </div>
 
   <main id="main"></main>
@@ -2587,7 +2621,7 @@ function renderReviewItems(){
       <div class="qty-row">
         <div class="qinfo">
           <div class="qname">${escapeHtml(item.name)}</div>
-          <div class="qunit">unit: ${escapeHtml(item.unit)}</div>
+          <div class="qunit">${escapeHtml(item.unit)}</div>
         </div>
         <input class="qty" type="number" min="0" inputmode="numeric" placeholder="0"
           value="${reviewQty[item.id] || ''}"
@@ -2928,7 +2962,7 @@ function renderOrderDetailItems(){
         <div class="qty-row">
           <div class="qinfo">
             <div class="qname">${escapeHtml(li.name)}</div>
-            <div class="qunit">unit: ${escapeHtml(li.unit)}</div>
+            <div class="qunit">${escapeHtml(li.unit)}</div>
           </div>
           <input class="qty" type="number" min="0" inputmode="numeric" value="${li.qty}"
             oninput="updateOrderItemQty(${i}, this.value)" onfocus="this.select()" onclick="this.select()">
@@ -2940,7 +2974,7 @@ function renderOrderDetailItems(){
         <div class="qty-row">
           <div class="qinfo">
             <div class="qname">${escapeHtml(li.name)}</div>
-            <div class="qunit">unit: ${escapeHtml(li.unit)}</div>
+            <div class="qunit">${escapeHtml(li.unit)}</div>
           </div>
           <div style="font-family:'IBM Plex Mono', monospace; font-weight:600; font-size:14px; color:var(--ink);">${li.qty}</div>
         </div>
@@ -3641,7 +3675,7 @@ function openAddModal(itemId){
 
   modalItemId = itemId;
   document.getElementById('modalTitle').textContent = item.name;
-  document.getElementById('modalUnit').textContent = 'unit: ' + item.unit;
+  document.getElementById('modalUnit').textContent = item.unit;
   const qtyInput = document.getElementById('modalQtyInput');
   qtyInput.value = '';
   document.getElementById('modalOverlay').classList.add('show');
@@ -3741,9 +3775,62 @@ function dismissInstallBanner(){
 }
 
 /* ---------- PWA SERVICE WORKER ---------- */
+let appUpdateReady = false;
+let waitingWorker = null;
+
+function showUpdateBanner(worker){
+  waitingWorker = worker;
+  appUpdateReady = true;
+  document.getElementById('updateBanner').classList.add('show');
+}
+
+function applyAppUpdate(){
+  if(!appUpdateReady) return;
+  document.getElementById('updateBanner').classList.remove('show');
+  // Tell the new worker to take over now (it's already finished installing
+  // and just sitting there ready) — 'controllerchange' below then reloads
+  // once it actually does.
+  if(waitingWorker){ waitingWorker.postMessage({ type:'SKIP_WAITING' }); }
+  else{ window.location.reload(); } // fallback: it may have already taken over on its own
+}
+
 if('serviceWorker' in navigator){
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', ()=>{
+    if(refreshing) return;
+    refreshing = true;
+    window.location.reload();
+  });
+
   window.addEventListener('load', ()=>{
-    navigator.serviceWorker.register('service-worker.js').catch(err=>{
+    navigator.serviceWorker.register('service-worker.js').then(reg=>{
+      // A worker already sitting in 'waiting' (e.g. installed while the
+      // app was in the background) counts as an update ready right away.
+      if(reg.waiting && navigator.serviceWorker.controller){
+        showUpdateBanner(reg.waiting);
+      }
+
+      reg.addEventListener('updatefound', ()=>{
+        const newWorker = reg.installing;
+        if(!newWorker) return;
+        newWorker.addEventListener('statechange', ()=>{
+          // 'installed' + an existing controller means this is a genuine
+          // update (not the very first install) — offer to refresh.
+          if(newWorker.state === 'installed' && navigator.serviceWorker.controller){
+            showUpdateBanner(newWorker);
+          }
+        });
+      });
+
+      // Actively look for updates instead of only relying on the browser's
+      // own occasional checks — this is what fixes the app appearing stuck
+      // on an old version until manually reinstalled. Check whenever the
+      // app comes back to the foreground, and every 30 minutes while open.
+      document.addEventListener('visibilitychange', ()=>{
+        if(document.visibilityState === 'visible') reg.update().catch(()=>{});
+      });
+      setInterval(()=> reg.update().catch(()=>{}), 30 * 60 * 1000);
+    }).catch(err=>{
       console.error('Service worker registration failed', err);
     });
   });

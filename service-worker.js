@@ -3,7 +3,7 @@
 // Item/supplier/order data itself is already handled offline separately,
 // in-page, via localStorage (see the app's own offline-first sync code).
 
-const CACHE_NAME = 'stockline-shell-v7';
+const CACHE_NAME = 'stockline-shell-v8';
 
 const APP_SHELL = [
   './',
@@ -21,6 +21,12 @@ const THIRD_PARTY = [
   'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'
 ];
 
+self.addEventListener('message', (event)=>{
+  if(event.data && event.data.type === 'SKIP_WAITING'){
+    self.skipWaiting();
+  }
+});
+
 self.addEventListener('install', (event)=>{
   event.waitUntil((async ()=>{
     const cache = await caches.open(CACHE_NAME);
@@ -34,7 +40,11 @@ self.addEventListener('install', (event)=>{
         // shell itself still installs fine without these.
       }
     }));
-    self.skipWaiting();
+    // Deliberately no self.skipWaiting() here — a freshly installed worker
+    // now waits until the page asks it to take over (see the 'message'
+    // listener above), which the page does once the user taps the
+    // "Refresh" banner. This avoids swapping the app shell out from under
+    // someone mid-order.
   })());
 });
 
