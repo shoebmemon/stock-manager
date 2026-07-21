@@ -1030,6 +1030,7 @@ let suppliersIO = null;
 const mainEl = document.getElementById('main');
 const toastEl = document.getElementById('toast');
 const TABS = ['order','active','completed','stocks','suppliers'];
+const SWIPE_ANIMATION_ENABLED = false; // debug: set back to true to restore the drag-follow + slide/fade visuals
 
 /* ---------- SWIPE NAVIGATION BETWEEN TABS ---------- */
 
@@ -1194,9 +1195,11 @@ function handleSwipeMove(e){
   // Touch fires faster than the screen can paint on a lot of devices — only
   // ever queue one style write per animation frame instead of one per event,
   // which is what was making the drag feel laggy/stuttery.
-  pendingFollow = follow;
-  if(swipeRafId === null){
-    swipeRafId = requestAnimationFrame(applyPendingFollow);
+  if(SWIPE_ANIMATION_ENABLED){
+    pendingFollow = follow;
+    if(swipeRafId === null){
+      swipeRafId = requestAnimationFrame(applyPendingFollow);
+    }
   }
 }
 
@@ -2181,10 +2184,12 @@ function switchTab(tab){
   mainEl.classList.remove('dragging');
   mainEl.style.transform = '';
   mainEl.classList.remove('tab-anim-next', 'tab-anim-prev', 'tab-anim-fade');
-  void mainEl.offsetWidth;
-  if(toIdx > fromIdx){ mainEl.classList.add('tab-anim-next'); }
-  else if(toIdx < fromIdx){ mainEl.classList.add('tab-anim-prev'); }
-  else { mainEl.classList.add('tab-anim-fade'); }
+  if(SWIPE_ANIMATION_ENABLED){
+    void mainEl.offsetWidth;
+    if(toIdx > fromIdx){ mainEl.classList.add('tab-anim-next'); }
+    else if(toIdx < fromIdx){ mainEl.classList.add('tab-anim-prev'); }
+    else { mainEl.classList.add('tab-anim-fade'); }
+  }
 }
 
 function capitalize(s){ return s.charAt(0).toUpperCase() + s.slice(1); }
