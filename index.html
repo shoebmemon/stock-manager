@@ -366,6 +366,14 @@
   .sr-name{ font-weight:600; font-size:13.5px; color:var(--ink); }
   .sr-meta{ font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--slate); margin-top:2px; }
   .sr-empty{ padding:12px; font-size:12.5px; color:var(--slate); }
+  .sr-empty-tap{
+    cursor:pointer;
+    background:rgba(232,163,61,0.12);
+    color:var(--amber-deep);
+    font-weight:600;
+    border-radius:8px;
+  }
+  .sr-empty-tap:active{ background:rgba(232,163,61,0.22); }
 
   button.primary{
     width:100%;
@@ -816,6 +824,7 @@
     font-weight:500;
     pointer-events:none;
   }
+  .modal-card .qty-input-wrap{ margin-top:12px; }
   .modal-card input.qty-input{
     width:100%;
     text-align:left;
@@ -823,7 +832,6 @@
     font-family:'IBM Plex Mono', monospace;
     font-weight:600;
     font-size:16px;
-    margin-top:12px;
   }
   .modal-actions{ display:flex; gap:10px; margin-top:16px; }
   .modal-actions button{ flex:1; margin-top:0; }
@@ -1080,11 +1088,13 @@ let loaded = false;
 let supplierStocksViewKey = null;
 let modalItemId = null;
 let addingNewStock = false;
+let stockFormPrefillName = '';
 let orderSearchQuery = '';
 let orderSelectedItemId = null;
 let orderQty = '';
 let viewingOrderId = null;
 let orderDetailSearch = '';
+let orderDetailAddOpen = false;
 let selectionMode = false;
 let selectionTab = null;
 let selectedOrderIds = new Set();
@@ -1403,7 +1413,7 @@ function showDuplicateItemModal(order, item, existingLine, newQty){
 
   overlay.innerHTML = `
     <div class="confirm-box">
-      <p class="confirm-msg">"${escapeHtml(item.name)}" is already in the active order for ${escapeHtml(item.supplierName)}, with a quantity of ${existingLine.qty} ${escapeHtml(item.unit)}. Update it to the new quantity?</p>
+      <p class="confirm-msg">"${escapeHtml(item.name)}" is already in the active order.<br>Update it to the new quantity?</p>
       <div class="confirm-qty-row">
         <label for="dupQtyInput">${escapeHtml(item.name)} (${escapeHtml(item.unit)})</label>
         <input type="number" min="0" inputmode="numeric" id="dupQtyInput" value="${prefill}" onfocus="this.select()" onclick="this.select()">
@@ -2339,12 +2349,11 @@ function renderOrderPicker(){
     <div class="section-label"><span class="left"><h2>Add to order</h2></span></div>
     <div class="card">
       <label for="f-order-search">Search & select item</label>
-      <div class="search-wrap has-add-btn">
+      <div class="search-wrap">
         <span class="sicon">⌕</span>
         <input id="f-order-search" placeholder="Type item name to filter…" autocomplete="off"
           value="${escapeHtml(orderSearchQuery)}"
           oninput="orderSearchQuery=this.value; orderSelectedItemId=null; renderOrderSearchResults(); updateOrderQtyUnitBadge(null)">
-        <button class="add-icon-btn" title="Add new item" onclick="openAddStockPage()">＋</button>
       </div>
       <div id="orderSearchResultsWrap"></div>
 
@@ -2379,7 +2388,7 @@ function renderOrderSearchResults(){
   const matches = stocks.filter(s=> s.name.toLowerCase().includes(q)).slice(0, 8);
 
   if(matches.length === 0){
-    wrap.innerHTML = `<div class="search-results"><div class="sr-empty">No matching items — tap + to add one.</div></div>`;
+    wrap.innerHTML = `<div class="search-results"><div class="sr-empty sr-empty-tap" onclick="openAddStockPage(orderSearchQuery)">No matching items — tap here to add one.</div></div>`;
     return;
   }
 
@@ -2463,11 +2472,12 @@ function addSearchedItemToOrder(){
   showToast('Added to order — view it in Active');
 }
 
-function openAddStockPage(){
+function openAddStockPage(prefillName){
   clearTimeout(longPressTimer);
   longPressFired = false;
   addingNewStock = true;
   editingStockId = null;
+  stockFormPrefillName = prefillName ? prefillName.trim() : '';
   render();
 }
 
@@ -2476,6 +2486,7 @@ function closeStockForm(){
   longPressFired = false;
   addingNewStock = false;
   editingStockId = null;
+  stockFormPrefillName = '';
   render();
 }
 
@@ -2490,7 +2501,7 @@ function renderStockForm(){
     <p class="section-sub" style="margin:-2px 0 12px 0;">⚠ Item names must be unique, and a supplier name must always use the same phone number.</p>
     <div class="card">
       <label for="f-name">Item name</label>
-      <input id="f-name" autocomplete="off" value="${editing ? escapeHtml(editing.name) : ''}">
+      <input id="f-name" autocomplete="off" value="${editing ? escapeHtml(editing.name) : escapeHtml(stockFormPrefillName)}">
 
       <label for="f-unit">Unit</label>
       <input id="f-unit" autocomplete="off" maxlength="4" value="${editing ? escapeHtml(editing.unit) : ''}"
@@ -2830,10 +2841,7 @@ function renderOrdersListItems(status){
 
 function positionSelectBar(){
   const bar = document.querySelector('.select-bar');
-  const header = document.querySelector('header.top');
-  if(bar && header){
-    bar.style.top = header.offsetHeight + 'px';
-  }
+  if(bar) bar.style.top = '';
 }
 
 /* ---------- MULTI-SELECT (long-press, WhatsApp style) ---------- */
@@ -2943,6 +2951,7 @@ function openOrderDetail(orderId){
   longPressFired = false;
   viewingOrderId = orderId;
   orderDetailSearch = '';
+  orderDetailAddOpen = false;
   render();
 }
 
@@ -2982,7 +2991,8 @@ function renderOrderDetail(){
       <div class="search-wrap">
         <span class="sicon">⌕</span>
         <input id="f-orderdetail-search" placeholder="Search this supplier's stock…" autocomplete="off"
-          value="${escapeHtml(orderDetailSearch)}" oninput="orderDetailSearch=this.value; renderOrderDetailAddResults()">
+          value="${escapeHtml(orderDetailSearch)}" oninput="orderDetailSearch=this.value; renderOrderDetailAddResults()"
+          onfocus="orderDetailAddOpen=true; renderOrderDetailAddResults()">
       </div>
       <div id="orderDetailAddResultsWrap"></div>
     `;
@@ -3017,7 +3027,7 @@ function renderOrderDetailItems(){
             <div class="qunit">unit: ${escapeHtml(li.unit)}</div>
           </div>
           <div class="qty-input-wrap qty-row-qty">
-            <input class="qty" type="number" min="0" inputmode="numeric" value="${li.qty}"
+            <input id="orderItemQty-${i}" class="qty" type="number" min="0" inputmode="numeric" value="${li.qty}"
               oninput="updateOrderItemQty(${i}, this.value)" onfocus="this.select()" onclick="this.select()">
           </div>
           <span class="qty-row-unit-outside">${escapeHtml(li.unit)}</span>
@@ -3063,16 +3073,16 @@ function renderOrderDetailAddResults(){
   if(!o) return;
 
   const q = orderDetailSearch.trim().toLowerCase();
-  if(!q){ wrap.innerHTML = ''; return; }
+  if(!orderDetailAddOpen && !q){ wrap.innerHTML = ''; return; }
 
   const existingKeys = new Set(o.items.map(li=> li.name.toLowerCase() + '|' + li.unit.toLowerCase()));
   const supplierStocks = stocks.filter(s=> supplierKey(s.supplierName, s.supplierPhone) === o.supplierKey);
   const matches = supplierStocks.filter(s=>
-    s.name.toLowerCase().includes(q) && !existingKeys.has(s.name.toLowerCase() + '|' + s.unit.toLowerCase())
-  ).slice(0, 8);
+    (!q || s.name.toLowerCase().includes(q)) && !existingKeys.has(s.name.toLowerCase() + '|' + s.unit.toLowerCase())
+  ).sort((a,b)=> a.name.localeCompare(b.name));
 
   if(matches.length === 0){
-    wrap.innerHTML = `<div class="search-results"><div class="sr-empty">No matching items to add.</div></div>`;
+    wrap.innerHTML = `<div class="search-results"><div class="sr-empty">${q ? 'No matching items to add.' : 'No more items from this supplier to add.'}</div></div>`;
     return;
   }
 
@@ -3092,7 +3102,14 @@ function addItemToOrderDetail(stockId){
   o.items.push({ name: item.name, unit: item.unit, qty: 1 });
   saveOrderHistory();
   orderDetailSearch = '';
+  orderDetailAddOpen = false;
+  const newIndex = o.items.length - 1;
   renderOrderDetail();
+  const qtyInput = document.getElementById(`orderItemQty-${newIndex}`);
+  if(qtyInput){
+    qtyInput.focus();
+    qtyInput.select();
+  }
   showToast('Item added — set the quantity');
 }
 
@@ -3190,12 +3207,9 @@ function renderStocksList(){
           : `<span class="idx">${String(i+1).padStart(3,'0')}</span>`}
         <div class="info">
           <div class="name">${escapeHtml(s.name)}</div>
-          <div class="meta">${escapeHtml(s.supplierName)} · ${escapeHtml(s.supplierPhone)}</div>
+          <div class="meta">${escapeHtml(s.supplierName)}</div>
         </div>
         <span class="unit-pill">${escapeHtml(s.unit)}</span>
-        ${inSelection ? `
-          <button class="icon-btn" title="Edit" onclick="event.stopPropagation(); startEditStock('${s.id}')">✎</button>
-        ` : ''}
       </div>
     `;
   });
@@ -3246,6 +3260,8 @@ function handleStockClick(id){
   if(longPressFired){ longPressFired = false; return; }
   if(stockSelectionMode){
     toggleStockSelection(id);
+  } else {
+    startEditStock(id);
   }
 }
 
@@ -3336,6 +3352,7 @@ function submitStockForm(){
     saveCreatedAtMap(caMap);
     saveStocks();
     addingNewStock = false;
+    stockFormPrefillName = '';
     if(currentTab === 'order'){
       orderSearchQuery = newItem.name;
       orderSelectedItemId = newItem.id;
