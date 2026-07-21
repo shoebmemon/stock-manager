@@ -3,7 +3,7 @@
 // Item/supplier/order data itself is already handled offline separately,
 // in-page, via localStorage (see the app's own offline-first sync code).
 
-const CACHE_NAME = 'stockline-shell-v6';
+const CACHE_NAME = 'stockline-shell-v7';
 
 const APP_SHELL = [
   './',

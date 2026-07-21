@@ -1017,6 +1017,32 @@ let selectionTab = null;
 let selectedOrderIds = new Set();
 let longPressTimer = null;
 let longPressFired = false;
+let pointerDownX = 0;
+let pointerDownY = 0;
+let pointerDownTime = 0;
+const TAP_MOVE_TOLERANCE = 10;
+const TAP_MAX_TIME = 450;
+
+function recordPointerDown(e){
+  if(e && e.touches && e.touches[0]){
+    pointerDownX = e.touches[0].clientX;
+    pointerDownY = e.touches[0].clientY;
+  }
+  pointerDownTime = Date.now();
+}
+
+// True only for a genuine, quick, mostly-stationary touchend — i.e. a tap.
+// Used to fire the tap action directly from touchend rather than waiting on
+// the browser's separate synthesized 'click' event, which can be delayed or
+// dropped for the first tap right after a swipe gesture.
+function isCleanTap(e){
+  if(!e || e.type !== 'touchend' || !e.changedTouches || !e.changedTouches[0]) return false;
+  const t = e.changedTouches[0];
+  const dx = Math.abs(t.clientX - pointerDownX);
+  const dy = Math.abs(t.clientY - pointerDownY);
+  const dt = Date.now() - pointerDownTime;
+  return dx < TAP_MOVE_TOLERANCE && dy < TAP_MOVE_TOLERANCE && dt < TAP_MAX_TIME;
+}
 let stockSelectionMode = false;
 let selectedStockIds = new Set();
 let supplierSelectionMode = false;
@@ -1030,7 +1056,7 @@ let suppliersIO = null;
 const mainEl = document.getElementById('main');
 const toastEl = document.getElementById('toast');
 const TABS = ['order','active','completed','stocks','suppliers'];
-const SWIPE_ANIMATION_ENABLED = false; // debug: set back to true to restore the drag-follow + slide/fade visuals
+const SWIPE_ANIMATION_ENABLED = true; // debug flag no longer needed — animation was ruled out; the real fix is the direct-touchend tap handling above
 
 /* ---------- SWIPE NAVIGATION BETWEEN TABS ---------- */
 
@@ -2741,11 +2767,11 @@ function renderOrdersListItems(status){
       html += `
         <div class="order-card clickable ${inSelection ? 'selecting' : ''} ${isSelected ? 'selected' : ''}"
           onmousedown="handleCardPointerDown('${order.id}','${status}')"
-          onmouseup="handleCardPointerUp()"
-          onmouseleave="handleCardPointerUp()"
-          ontouchstart="handleCardPointerDown('${order.id}','${status}')"
-          ontouchend="handleCardPointerUp()"
-          ontouchmove="handleCardPointerUp()"
+          onmouseup="handleCardPointerUp('${order.id}','${status}')"
+          onmouseleave="handleCardPointerUp('${order.id}','${status}')"
+          ontouchstart="handleCardPointerDown('${order.id}','${status}', event)"
+          ontouchend="handleCardPointerUp('${order.id}','${status}', event)"
+          ontouchmove="handleCardPointerUp('${order.id}','${status}')"
           oncontextmenu="return false"
           onclick="handleCardClick('${order.id}','${status}')">
           ${inSelection ? `<div class="select-check ${isSelected ? 'checked' : ''}"></div>` : ''}
@@ -2773,17 +2799,24 @@ function positionSelectBar(){
 
 /* ---------- MULTI-SELECT (long-press, WhatsApp style) ---------- */
 
-function handleCardPointerDown(orderId, status){
+function handleCardPointerDown(orderId, status, e){
   longPressFired = false;
   clearTimeout(longPressTimer);
+  recordPointerDown(e);
   longPressTimer = setTimeout(()=>{
     longPressFired = true;
     enterSelectionMode(status, orderId);
   }, 450);
 }
 
-function handleCardPointerUp(){
+function handleCardPointerUp(orderId, status, e){
   clearTimeout(longPressTimer);
+  if(e && e.type !== 'touchend') return; // touchmove/mouseup calls just cancel the long-press timer
+  if(longPressFired){ longPressFired = false; return; }
+  if(isCleanTap(e)){
+    e.preventDefault();
+    handleCardClick(orderId, status);
+  }
 }
 
 function handleCardClick(orderId, status){
@@ -3103,11 +3136,11 @@ function renderStocksList(){
     html += `
       <div class="ledger-row ${inSelection ? 'selecting' : ''} ${isSelected ? 'selected' : ''}"
         onmousedown="handleStockPointerDown('${s.id}')"
-        onmouseup="handleStockPointerUp()"
-        onmouseleave="handleStockPointerUp()"
-        ontouchstart="handleStockPointerDown('${s.id}')"
-        ontouchend="handleStockPointerUp()"
-        ontouchmove="handleStockPointerUp()"
+        onmouseup="handleStockPointerUp('${s.id}')"
+        onmouseleave="handleStockPointerUp('${s.id}')"
+        ontouchstart="handleStockPointerDown('${s.id}', event)"
+        ontouchend="handleStockPointerUp('${s.id}', event)"
+        ontouchmove="handleStockPointerUp('${s.id}')"
         oncontextmenu="return false"
         onclick="handleStockClick('${s.id}')">
         ${inSelection
@@ -3145,9 +3178,10 @@ function renderStocksList(){
 
 /* ---------- STOCKS MULTI-SELECT (long-press, WhatsApp style) ---------- */
 
-function handleStockPointerDown(id){
+function handleStockPointerDown(id, e){
   longPressFired = false;
   clearTimeout(longPressTimer);
+  recordPointerDown(e);
   longPressTimer = setTimeout(()=>{
     longPressFired = true;
     stockSelectionMode = true;
@@ -3156,8 +3190,14 @@ function handleStockPointerDown(id){
   }, 450);
 }
 
-function handleStockPointerUp(){
+function handleStockPointerUp(id, e){
   clearTimeout(longPressTimer);
+  if(e && e.type !== 'touchend') return;
+  if(longPressFired){ longPressFired = false; return; }
+  if(isCleanTap(e)){
+    e.preventDefault();
+    handleStockClick(id);
+  }
 }
 
 function handleStockClick(id){
@@ -3378,11 +3418,11 @@ function renderSuppliersList(){
     html += `
       <div class="supplier-card ${isSelected ? 'selected' : ''}"
         onmousedown="handleSupplierPointerDown('${key}')"
-        onmouseup="handleSupplierPointerUp()"
-        onmouseleave="handleSupplierPointerUp()"
-        ontouchstart="handleSupplierPointerDown('${key}')"
-        ontouchend="handleSupplierPointerUp()"
-        ontouchmove="handleSupplierPointerUp()"
+        onmouseup="handleSupplierPointerUp('${key}')"
+        onmouseleave="handleSupplierPointerUp('${key}')"
+        ontouchstart="handleSupplierPointerDown('${key}', event)"
+        ontouchend="handleSupplierPointerUp('${key}', event)"
+        ontouchmove="handleSupplierPointerUp('${key}')"
         oncontextmenu="return false"
         onclick="handleSupplierClick('${key}')">
         <div class="top-row">
@@ -3421,9 +3461,10 @@ function renderSuppliersList(){
 
 /* ---------- SUPPLIERS MULTI-SELECT (long-press, WhatsApp style) ---------- */
 
-function handleSupplierPointerDown(key){
+function handleSupplierPointerDown(key, e){
   longPressFired = false;
   clearTimeout(longPressTimer);
+  recordPointerDown(e);
   longPressTimer = setTimeout(()=>{
     longPressFired = true;
     supplierSelectionMode = true;
@@ -3432,8 +3473,14 @@ function handleSupplierPointerDown(key){
   }, 450);
 }
 
-function handleSupplierPointerUp(){
+function handleSupplierPointerUp(key, e){
   clearTimeout(longPressTimer);
+  if(e && e.type !== 'touchend') return;
+  if(longPressFired){ longPressFired = false; return; }
+  if(isCleanTap(e)){
+    e.preventDefault();
+    handleSupplierClick(key);
+  }
 }
 
 function handleSupplierClick(key){
