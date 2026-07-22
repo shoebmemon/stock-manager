@@ -3723,7 +3723,15 @@ function renderSupplierStockList(){
 
   sup.items.forEach((item, i)=>{
     html += `
-      <div class="ledger-row" style="cursor:pointer" onclick="openAddModal('${item.id}')">
+      <div class="ledger-row" style="cursor:pointer"
+        onmousedown="handleSupplierStockPointerDown('${item.id}')"
+        onmouseup="handleSupplierStockPointerUp('${item.id}')"
+        onmouseleave="handleSupplierStockPointerUp('${item.id}')"
+        ontouchstart="handleSupplierStockPointerDown('${item.id}', event)"
+        ontouchend="handleSupplierStockPointerUp('${item.id}', event)"
+        ontouchmove="handleSupplierStockPointerUp('${item.id}')"
+        oncontextmenu="return false"
+        onclick="handleSupplierStockClick('${item.id}')">
         <span class="idx">${String(i+1).padStart(3,'0')}</span>
         <div class="info">
           <div class="name">${escapeHtml(item.name)}</div>
@@ -3736,6 +3744,31 @@ function renderSupplierStockList(){
 
   html += '</div>';
   mainEl.innerHTML = html;
+}
+
+function handleSupplierStockPointerDown(id, e){
+  longPressFired = false;
+  clearTimeout(longPressTimer);
+  recordPointerDown(e);
+  longPressTimer = setTimeout(()=>{
+    longPressFired = true;
+    startEditStock(id);
+  }, 450);
+}
+
+function handleSupplierStockPointerUp(id, e){
+  clearTimeout(longPressTimer);
+  if(e && e.type !== 'touchend') return;
+  if(longPressFired){ longPressFired = false; return; }
+  if(isCleanTap(e)){
+    e.preventDefault();
+    openAddModal(id);
+  }
+}
+
+function handleSupplierStockClick(id){
+  if(longPressFired){ longPressFired = false; return; }
+  openAddModal(id);
 }
 
 function openAddModal(itemId){
@@ -3814,6 +3847,41 @@ function escapeHtml(str){
 TABS.forEach(t=> document.getElementById('tab' + capitalize(t) + 'Btn').classList.toggle('active', t === currentTab));
 window.addEventListener('resize', positionSelectBar);
 loadData();
+
+/* ---------- KEYBOARD-AWARE SCROLLING ----------
+   On mobile, the on-screen keyboard covers the lower part of the screen
+   without shrinking the page layout. That can hide the field someone is
+   typing into (and anything below it) behind the keyboard, with no way to
+   scroll it into view since `main` isn't actually overflowing.
+   Fix: when the keyboard opens, pad the bottom of `main` by the keyboard's
+   height so that space becomes scrollable, then bring the focused field
+   into view within it. The bottom nav bar lives outside `main`, so it's
+   never touched by this and stays exactly where it is. When the keyboard
+   closes, the padding is removed and everything reverts to normal. */
+let keyboardOpen = false;
+function handleKeyboardViewportChange(){
+  if(!window.visualViewport) return;
+  const heightDiff = window.innerHeight - window.visualViewport.height;
+  const nowOpen = heightDiff > 120; // threshold to ignore address-bar show/hide, not just the keyboard
+
+  if(nowOpen){
+    keyboardOpen = true;
+    mainEl.style.paddingBottom = heightDiff + 'px';
+    const active = document.activeElement;
+    if(active && mainEl.contains(active) && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')){
+      requestAnimationFrame(()=>{
+        active.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      });
+    }
+  } else if(keyboardOpen){
+    keyboardOpen = false;
+    mainEl.style.paddingBottom = '';
+  }
+}
+if(window.visualViewport){
+  window.visualViewport.addEventListener('resize', handleKeyboardViewportChange);
+  window.visualViewport.addEventListener('scroll', handleKeyboardViewportChange);
+}
 
 /* ---------- PWA: INSTALL PROMPT ---------- */
 const INSTALL_DISMISS_KEY = 'stockline_install_dismissed';
