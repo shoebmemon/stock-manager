@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1, interactive-widget=resizes-content">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
 <title>Stockline — Order Book</title>
 
 <link rel="manifest" href="manifest.json">
@@ -173,9 +173,6 @@
     border-top:1px solid #303B4B;
     padding:6px 4px calc(6px + env(safe-area-inset-bottom, 0px)) 4px;
     z-index:30;
-  }
-  body.keyboard-open nav.bottom-tabs{
-    display:none !important;
   }
   nav.bottom-tabs button{
     flex:1;
@@ -369,6 +366,14 @@
   .sr-name{ font-weight:600; font-size:13.5px; color:var(--ink); }
   .sr-meta{ font-family:'IBM Plex Mono', monospace; font-size:11px; color:var(--slate); margin-top:2px; }
   .sr-empty{ padding:12px; font-size:12.5px; color:var(--slate); }
+  .sr-empty-tap{
+    cursor:pointer;
+    background:rgba(232,163,61,0.12);
+    color:var(--amber-deep);
+    font-weight:600;
+    border-radius:8px;
+  }
+  .sr-empty-tap:active{ background:rgba(232,163,61,0.22); }
 
   button.primary{
     width:100%;
@@ -819,6 +824,7 @@
     font-weight:500;
     pointer-events:none;
   }
+  .modal-card .qty-input-wrap{ margin-top:12px; }
   .modal-card input.qty-input{
     width:100%;
     text-align:left;
@@ -826,7 +832,6 @@
     font-family:'IBM Plex Mono', monospace;
     font-weight:600;
     font-size:16px;
-    margin-top:12px;
   }
   .modal-actions{ display:flex; gap:10px; margin-top:16px; }
   .modal-actions button{ flex:1; margin-top:0; }
@@ -1083,11 +1088,13 @@ let loaded = false;
 let supplierStocksViewKey = null;
 let modalItemId = null;
 let addingNewStock = false;
+let stockFormPrefillName = '';
 let orderSearchQuery = '';
 let orderSelectedItemId = null;
 let orderQty = '';
 let viewingOrderId = null;
 let orderDetailSearch = '';
+let orderDetailAddOpen = false;
 let selectionMode = false;
 let selectionTab = null;
 let selectedOrderIds = new Set();
@@ -1406,7 +1413,7 @@ function showDuplicateItemModal(order, item, existingLine, newQty){
 
   overlay.innerHTML = `
     <div class="confirm-box">
-      <p class="confirm-msg">"${escapeHtml(item.name)}" is already in the active order for ${escapeHtml(item.supplierName)}, with a quantity of ${existingLine.qty} ${escapeHtml(item.unit)}. Update it to the new quantity?</p>
+      <p class="confirm-msg">"${escapeHtml(item.name)}" is already in the active order.<br>Update it to the new quantity?</p>
       <div class="confirm-qty-row">
         <label for="dupQtyInput">${escapeHtml(item.name)} (${escapeHtml(item.unit)})</label>
         <input type="number" min="0" inputmode="numeric" id="dupQtyInput" value="${prefill}" onfocus="this.select()" onclick="this.select()">
@@ -2342,12 +2349,11 @@ function renderOrderPicker(){
     <div class="section-label"><span class="left"><h2>Add to order</h2></span></div>
     <div class="card">
       <label for="f-order-search">Search & select item</label>
-      <div class="search-wrap has-add-btn">
+      <div class="search-wrap">
         <span class="sicon">⌕</span>
         <input id="f-order-search" placeholder="Type item name to filter…" autocomplete="off"
           value="${escapeHtml(orderSearchQuery)}"
           oninput="orderSearchQuery=this.value; orderSelectedItemId=null; renderOrderSearchResults(); updateOrderQtyUnitBadge(null)">
-        <button class="add-icon-btn" title="Add new item" onclick="openAddStockPage()">＋</button>
       </div>
       <div id="orderSearchResultsWrap"></div>
 
@@ -2382,7 +2388,7 @@ function renderOrderSearchResults(){
   const matches = stocks.filter(s=> s.name.toLowerCase().includes(q)).slice(0, 8);
 
   if(matches.length === 0){
-    wrap.innerHTML = `<div class="search-results"><div class="sr-empty">No matching items — tap + to add one.</div></div>`;
+    wrap.innerHTML = `<div class="search-results"><div class="sr-empty sr-empty-tap" onclick="openAddStockPage(orderSearchQuery)">No matching items — tap here to add one.</div></div>`;
     return;
   }
 
@@ -2466,11 +2472,12 @@ function addSearchedItemToOrder(){
   showToast('Added to order — view it in Active');
 }
 
-function openAddStockPage(){
+function openAddStockPage(prefillName){
   clearTimeout(longPressTimer);
   longPressFired = false;
   addingNewStock = true;
   editingStockId = null;
+  stockFormPrefillName = prefillName ? prefillName.trim() : '';
   render();
 }
 
@@ -2479,6 +2486,7 @@ function closeStockForm(){
   longPressFired = false;
   addingNewStock = false;
   editingStockId = null;
+  stockFormPrefillName = '';
   render();
 }
 
@@ -2493,7 +2501,7 @@ function renderStockForm(){
     <p class="section-sub" style="margin:-2px 0 12px 0;">⚠ Item names must be unique, and a supplier name must always use the same phone number.</p>
     <div class="card">
       <label for="f-name">Item name</label>
-      <input id="f-name" autocomplete="off" value="${editing ? escapeHtml(editing.name) : ''}">
+      <input id="f-name" autocomplete="off" value="${editing ? escapeHtml(editing.name) : escapeHtml(stockFormPrefillName)}">
 
       <label for="f-unit">Unit</label>
       <input id="f-unit" autocomplete="off" maxlength="4" value="${editing ? escapeHtml(editing.unit) : ''}"
@@ -2833,10 +2841,7 @@ function renderOrdersListItems(status){
 
 function positionSelectBar(){
   const bar = document.querySelector('.select-bar');
-  const header = document.querySelector('header.top');
-  if(bar && header){
-    bar.style.top = header.offsetHeight + 'px';
-  }
+  if(bar) bar.style.top = '';
 }
 
 /* ---------- MULTI-SELECT (long-press, WhatsApp style) ---------- */
@@ -2917,7 +2922,7 @@ function sendToWhatsApp(orderId){
 
   const wasActive = o.status === 'active';
 
-  const header = `*Order*\n\nTo: ${o.supplierName}\n`;
+  const header = `Order\nTo: ${o.supplierName}\n`;
   const body = o.items.map(li=> `• ${li.name} — ${li.qty} ${li.unit}`).join('\n');
   const message = `${header}\n${body}\n\nThank you!`;
 
@@ -2946,6 +2951,7 @@ function openOrderDetail(orderId){
   longPressFired = false;
   viewingOrderId = orderId;
   orderDetailSearch = '';
+  orderDetailAddOpen = false;
   render();
 }
 
@@ -2985,7 +2991,8 @@ function renderOrderDetail(){
       <div class="search-wrap">
         <span class="sicon">⌕</span>
         <input id="f-orderdetail-search" placeholder="Search this supplier's stock…" autocomplete="off"
-          value="${escapeHtml(orderDetailSearch)}" oninput="orderDetailSearch=this.value; renderOrderDetailAddResults()">
+          value="${escapeHtml(orderDetailSearch)}" oninput="orderDetailSearch=this.value; renderOrderDetailAddResults()"
+          onfocus="orderDetailAddOpen=true; renderOrderDetailAddResults()">
       </div>
       <div id="orderDetailAddResultsWrap"></div>
     `;
@@ -3020,7 +3027,7 @@ function renderOrderDetailItems(){
             <div class="qunit">unit: ${escapeHtml(li.unit)}</div>
           </div>
           <div class="qty-input-wrap qty-row-qty">
-            <input class="qty" type="number" min="0" inputmode="numeric" value="${li.qty}"
+            <input id="orderItemQty-${i}" class="qty" type="number" min="0" inputmode="numeric" value="${li.qty}"
               oninput="updateOrderItemQty(${i}, this.value)" onfocus="this.select()" onclick="this.select()">
           </div>
           <span class="qty-row-unit-outside">${escapeHtml(li.unit)}</span>
@@ -3066,16 +3073,16 @@ function renderOrderDetailAddResults(){
   if(!o) return;
 
   const q = orderDetailSearch.trim().toLowerCase();
-  if(!q){ wrap.innerHTML = ''; return; }
+  if(!orderDetailAddOpen && !q){ wrap.innerHTML = ''; return; }
 
   const existingKeys = new Set(o.items.map(li=> li.name.toLowerCase() + '|' + li.unit.toLowerCase()));
   const supplierStocks = stocks.filter(s=> supplierKey(s.supplierName, s.supplierPhone) === o.supplierKey);
   const matches = supplierStocks.filter(s=>
-    s.name.toLowerCase().includes(q) && !existingKeys.has(s.name.toLowerCase() + '|' + s.unit.toLowerCase())
-  ).slice(0, 8);
+    (!q || s.name.toLowerCase().includes(q)) && !existingKeys.has(s.name.toLowerCase() + '|' + s.unit.toLowerCase())
+  ).sort((a,b)=> a.name.localeCompare(b.name));
 
   if(matches.length === 0){
-    wrap.innerHTML = `<div class="search-results"><div class="sr-empty">No matching items to add.</div></div>`;
+    wrap.innerHTML = `<div class="search-results"><div class="sr-empty">${q ? 'No matching items to add.' : 'No more items from this supplier to add.'}</div></div>`;
     return;
   }
 
@@ -3095,7 +3102,14 @@ function addItemToOrderDetail(stockId){
   o.items.push({ name: item.name, unit: item.unit, qty: 1 });
   saveOrderHistory();
   orderDetailSearch = '';
+  orderDetailAddOpen = false;
+  const newIndex = o.items.length - 1;
   renderOrderDetail();
+  const qtyInput = document.getElementById(`orderItemQty-${newIndex}`);
+  if(qtyInput){
+    qtyInput.focus();
+    qtyInput.select();
+  }
   showToast('Item added — set the quantity');
 }
 
@@ -3193,12 +3207,9 @@ function renderStocksList(){
           : `<span class="idx">${String(i+1).padStart(3,'0')}</span>`}
         <div class="info">
           <div class="name">${escapeHtml(s.name)}</div>
-          <div class="meta">${escapeHtml(s.supplierName)} · ${escapeHtml(s.supplierPhone)}</div>
+          <div class="meta">${escapeHtml(s.supplierName)}</div>
         </div>
         <span class="unit-pill">${escapeHtml(s.unit)}</span>
-        ${inSelection ? `
-          <button class="icon-btn" title="Edit" onclick="event.stopPropagation(); startEditStock('${s.id}')">✎</button>
-        ` : ''}
       </div>
     `;
   });
@@ -3249,6 +3260,8 @@ function handleStockClick(id){
   if(longPressFired){ longPressFired = false; return; }
   if(stockSelectionMode){
     toggleStockSelection(id);
+  } else {
+    startEditStock(id);
   }
 }
 
@@ -3339,6 +3352,7 @@ function submitStockForm(){
     saveCreatedAtMap(caMap);
     saveStocks();
     addingNewStock = false;
+    stockFormPrefillName = '';
     if(currentTab === 'order'){
       orderSearchQuery = newItem.name;
       orderSelectedItemId = newItem.id;
@@ -3478,7 +3492,11 @@ function renderSuppliersList(){
           </div>
           <div class="sitems">${sup.items.length} item${sup.items.length===1?'':'s'}</div>
           ${supplierSelectionMode ? `
-            <button class="icon-btn" title="Edit supplier" onclick="event.stopPropagation(); startEditSupplier('${key}')">✎</button>
+            <button class="icon-btn" title="Edit supplier"
+              ontouchstart="event.stopPropagation()"
+              ontouchend="event.stopPropagation()"
+              onmousedown="event.stopPropagation()"
+              onclick="event.stopPropagation(); startEditSupplier('${key}')">✎</button>
           ` : ''}
         </div>
       </div>
@@ -3705,7 +3723,15 @@ function renderSupplierStockList(){
 
   sup.items.forEach((item, i)=>{
     html += `
-      <div class="ledger-row" style="cursor:pointer" onclick="openAddModal('${item.id}')">
+      <div class="ledger-row" style="cursor:pointer"
+        onmousedown="handleSupplierStockPointerDown('${item.id}')"
+        onmouseup="handleSupplierStockPointerUp('${item.id}')"
+        onmouseleave="handleSupplierStockPointerUp('${item.id}')"
+        ontouchstart="handleSupplierStockPointerDown('${item.id}', event)"
+        ontouchend="handleSupplierStockPointerUp('${item.id}', event)"
+        ontouchmove="handleSupplierStockPointerUp('${item.id}')"
+        oncontextmenu="return false"
+        onclick="handleSupplierStockClick('${item.id}')">
         <span class="idx">${String(i+1).padStart(3,'0')}</span>
         <div class="info">
           <div class="name">${escapeHtml(item.name)}</div>
@@ -3718,6 +3744,31 @@ function renderSupplierStockList(){
 
   html += '</div>';
   mainEl.innerHTML = html;
+}
+
+function handleSupplierStockPointerDown(id, e){
+  longPressFired = false;
+  clearTimeout(longPressTimer);
+  recordPointerDown(e);
+  longPressTimer = setTimeout(()=>{
+    longPressFired = true;
+    startEditStock(id);
+  }, 450);
+}
+
+function handleSupplierStockPointerUp(id, e){
+  clearTimeout(longPressTimer);
+  if(e && e.type !== 'touchend') return;
+  if(longPressFired){ longPressFired = false; return; }
+  if(isCleanTap(e)){
+    e.preventDefault();
+    openAddModal(id);
+  }
+}
+
+function handleSupplierStockClick(id){
+  if(longPressFired){ longPressFired = false; return; }
+  openAddModal(id);
 }
 
 function openAddModal(itemId){
@@ -3797,20 +3848,74 @@ TABS.forEach(t=> document.getElementById('tab' + capitalize(t) + 'Btn').classLis
 window.addEventListener('resize', positionSelectBar);
 loadData();
 
-/* ---------- Hide bottom nav while the on-screen keyboard is open ---------- */
-let maxViewportHeight = window.innerHeight;
-window.addEventListener('resize', ()=>{
-  if(window.innerHeight > maxViewportHeight) maxViewportHeight = window.innerHeight;
-  if(window.innerHeight < maxViewportHeight - 150) document.body.classList.add('keyboard-open');
-  else document.body.classList.remove('keyboard-open');
-});
-document.addEventListener('focusout', ()=>{
-  setTimeout(()=>{
-    if(!document.activeElement || !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)){
-      document.body.classList.remove('keyboard-open');
+/* ---------- KEYBOARD-AWARE SCROLLING ----------
+   On mobile, the on-screen keyboard covers the lower part of the screen
+   without shrinking the page layout. That can hide the field someone is
+   typing into (and anything below it) behind the keyboard, with no way to
+   scroll it into view since `main` isn't actually overflowing.
+   Fix: when the keyboard opens, pad the bottom of `main` by the keyboard's
+   height so that space becomes scrollable, then bring the focused field
+   into view within it. The bottom nav bar lives outside `main`, so it's
+   never touched by this and stays exactly where it is. When the keyboard
+   closes, the padding is removed and everything reverts to normal. */
+let keyboardOpen = false;
+function handleKeyboardViewportChange(){
+  if(!window.visualViewport) return;
+  const heightDiff = window.innerHeight - window.visualViewport.height;
+  const nowOpen = heightDiff > 120; // threshold to ignore address-bar show/hide, not just the keyboard
+  const bottomTabs = document.querySelector('nav.bottom-tabs');
+  const openOverlays = document.querySelectorAll('.modal-overlay.show, .confirm-overlay.show');
+  const modalIsOpen = openOverlays.length > 0;
+
+  if(nowOpen){
+    keyboardOpen = true;
+    // A little breathing room beyond the exact keyboard height, so the
+    // focused field can sit comfortably above it rather than right at the edge.
+    mainEl.style.paddingBottom = (heightDiff + 24) + 'px';
+    // Some mobile browsers force-scroll the visual viewport when a keyboard
+    // opens, which can let the bottom nav peek out from behind a fixed
+    // modal overlay. Hiding it (without changing layout) while a modal +
+    // keyboard are both active avoids that.
+    if(bottomTabs) bottomTabs.style.visibility = modalIsOpen ? 'hidden' : '';
+    // Modal overlays are position:fixed and flex-center their card within
+    // their own box — but that box doesn't shrink when the keyboard opens
+    // (fixed elements track the full layout viewport, not the smaller
+    // visual one), so the card stays centered on the old full-screen
+    // height, leaving a big empty gap above the keyboard. Explicitly
+    // sizing the overlay to the real visible height fixes the centering.
+    openOverlays.forEach(el=>{
+      el.style.height = window.visualViewport.height + 'px';
+      el.style.top = window.visualViewport.offsetTop + 'px';
+    });
+    const active = document.activeElement;
+    if(active && mainEl.contains(active) && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')){
+      requestAnimationFrame(()=>{
+        const rect = active.getBoundingClientRect();
+        const visibleBottom = window.visualViewport.height + window.visualViewport.offsetTop;
+        const margin = 16;
+        // Only scroll if the field is actually hidden behind (or right up
+        // against) the keyboard — don't fight the browser's own adjustment
+        // when the field is already comfortably visible.
+        if(rect.bottom > visibleBottom - margin){
+          const delta = rect.bottom - (visibleBottom - margin);
+          mainEl.scrollBy({ top: delta, behavior: 'smooth' });
+        }
+      });
     }
-  }, 50);
-});
+  } else if(keyboardOpen){
+    keyboardOpen = false;
+    mainEl.style.paddingBottom = '';
+    if(bottomTabs) bottomTabs.style.visibility = '';
+    document.querySelectorAll('.modal-overlay, .confirm-overlay').forEach(el=>{
+      el.style.height = '';
+      el.style.top = '';
+    });
+  }
+}
+if(window.visualViewport){
+  window.visualViewport.addEventListener('resize', handleKeyboardViewportChange);
+  window.visualViewport.addEventListener('scroll', handleKeyboardViewportChange);
+}
 
 /* ---------- PWA: INSTALL PROMPT ---------- */
 const INSTALL_DISMISS_KEY = 'stockline_install_dismissed';
@@ -3862,9 +3967,7 @@ function applyAppUpdate(){
   document.getElementById('updateBanner').classList.remove('show');
   // Tell the new worker to take over now (it's already finished installing
   // and just sitting there ready) — 'controllerchange' below then reloads
-  // once it actually does. This only ever runs from the user tapping the
-  // "Refresh" banner — never automatically — so an update can never
-  // interrupt someone mid-order.
+  // once it actually does.
   if(waitingWorker){ waitingWorker.postMessage({ type:'SKIP_WAITING' }); }
   else{ window.location.reload(); } // fallback: it may have already taken over on its own
 }
@@ -3890,8 +3993,7 @@ if('serviceWorker' in navigator){
         if(!newWorker) return;
         newWorker.addEventListener('statechange', ()=>{
           // 'installed' + an existing controller means this is a genuine
-          // update (not the very first install) — offer to refresh, don't
-          // force it.
+          // update (not the very first install) — offer to refresh.
           if(newWorker.state === 'installed' && navigator.serviceWorker.controller){
             showUpdateBanner(newWorker);
           }
