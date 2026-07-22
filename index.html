@@ -3492,7 +3492,11 @@ function renderSuppliersList(){
           </div>
           <div class="sitems">${sup.items.length} item${sup.items.length===1?'':'s'}</div>
           ${supplierSelectionMode ? `
-            <button class="icon-btn" title="Edit supplier" onclick="event.stopPropagation(); startEditSupplier('${key}')">✎</button>
+            <button class="icon-btn" title="Edit supplier"
+              ontouchstart="event.stopPropagation()"
+              ontouchend="event.stopPropagation()"
+              onmousedown="event.stopPropagation()"
+              onclick="event.stopPropagation(); startEditSupplier('${key}')">✎</button>
           ` : ''}
         </div>
       </div>
