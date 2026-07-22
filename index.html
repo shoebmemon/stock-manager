@@ -3863,19 +3863,38 @@ function handleKeyboardViewportChange(){
   if(!window.visualViewport) return;
   const heightDiff = window.innerHeight - window.visualViewport.height;
   const nowOpen = heightDiff > 120; // threshold to ignore address-bar show/hide, not just the keyboard
+  const bottomTabs = document.querySelector('nav.bottom-tabs');
+  const modalIsOpen = !!document.querySelector('.modal-overlay.show');
 
   if(nowOpen){
     keyboardOpen = true;
-    mainEl.style.paddingBottom = heightDiff + 'px';
+    // A little breathing room beyond the exact keyboard height, so the
+    // focused field can sit comfortably above it rather than right at the edge.
+    mainEl.style.paddingBottom = (heightDiff + 24) + 'px';
+    // Some mobile browsers force-scroll the visual viewport when a keyboard
+    // opens, which can let the bottom nav peek out from behind a fixed
+    // modal overlay. Hiding it (without changing layout) while a modal +
+    // keyboard are both active avoids that.
+    if(bottomTabs) bottomTabs.style.visibility = modalIsOpen ? 'hidden' : '';
     const active = document.activeElement;
     if(active && mainEl.contains(active) && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')){
       requestAnimationFrame(()=>{
-        active.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        const rect = active.getBoundingClientRect();
+        const visibleBottom = window.visualViewport.height + window.visualViewport.offsetTop;
+        const margin = 16;
+        // Only scroll if the field is actually hidden behind (or right up
+        // against) the keyboard — don't fight the browser's own adjustment
+        // when the field is already comfortably visible.
+        if(rect.bottom > visibleBottom - margin){
+          const delta = rect.bottom - (visibleBottom - margin);
+          mainEl.scrollBy({ top: delta, behavior: 'smooth' });
+        }
       });
     }
   } else if(keyboardOpen){
     keyboardOpen = false;
     mainEl.style.paddingBottom = '';
+    if(bottomTabs) bottomTabs.style.visibility = '';
   }
 }
 if(window.visualViewport){
