@@ -3,7 +3,7 @@
 // Item/supplier/order data itself is already handled offline separately,
 // in-page, via localStorage (see the app's own offline-first sync code).
 
-const CACHE_NAME = 'stockline-shell-v8';
+const CACHE_NAME = 'stockline-shell-v9';
 
 const APP_SHELL = [
   './',
@@ -30,7 +30,10 @@ self.addEventListener('message', (event)=>{
 self.addEventListener('install', (event)=>{
   event.waitUntil((async ()=>{
     const cache = await caches.open(CACHE_NAME);
-    await cache.addAll(APP_SHELL);
+    await Promise.all(APP_SHELL.map(async (url)=>{
+      const res = await fetch(url, { cache: 'no-store' });
+      await cache.put(url, res);
+    }));
     await Promise.all(THIRD_PARTY.map(async (url)=>{
       try{
         const res = await fetch(url, { mode: 'no-cors' });
@@ -61,11 +64,15 @@ self.addEventListener('fetch', (event)=>{
   if(req.method !== 'GET') return;
 
   // Page navigations: try the network first so updates show up right away,
-  // fall back to the cached shell when offline.
+  // fall back to the cached shell when offline. cache:'no-store' is the key
+  // part here — without it, a plain fetch() can be silently satisfied from
+  // the browser's own HTTP cache (e.g. GitHub Pages' Cache-Control headers)
+  // instead of actually going to the network, which is what was making new
+  // deploys invisible even though this logic already says "network-first".
   if(req.mode === 'navigate'){
     event.respondWith((async ()=>{
       try{
-        const fresh = await fetch(req);
+        const fresh = await fetch(req, { cache: 'no-store' });
         const cache = await caches.open(CACHE_NAME);
         cache.put('./index.html', fresh.clone());
         return fresh;
