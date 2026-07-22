@@ -173,16 +173,9 @@
     border-top:1px solid #303B4B;
     padding:6px 4px calc(6px + env(safe-area-inset-bottom, 0px)) 4px;
     z-index:30;
-    max-height:100px;
-    overflow:hidden;
-    transition:max-height .18s ease, padding .18s ease, opacity .15s ease;
   }
-  nav.bottom-tabs.kb-hidden{
-    max-height:0;
-    padding-top:0;
-    padding-bottom:0;
-    opacity:0;
-    border-top-color:transparent;
+  body.keyboard-open nav.bottom-tabs{
+    display:none !important;
   }
   nav.bottom-tabs button{
     flex:1;
@@ -3805,51 +3798,19 @@ window.addEventListener('resize', positionSelectBar);
 loadData();
 
 /* ---------- Hide bottom nav while the on-screen keyboard is open ---------- */
-(function(){
-  const bottomNav = document.querySelector('nav.bottom-tabs');
-  if(!bottomNav) return;
-
-  let kbOpen = false;
-  function setKbOpen(open){
-    if(open === kbOpen) return;
-    kbOpen = open;
-    bottomNav.classList.toggle('kb-hidden', open);
-  }
-
-  // Primary signal: visualViewport shrinking noticeably means the keyboard is up.
-  if(window.visualViewport){
-    const vv = window.visualViewport;
-    let baseHeight = vv.height;
-    const onVVResize = ()=>{
-      // Track the largest height we've seen as the "no keyboard" baseline,
-      // since it can also change from address-bar show/hide, rotation, etc.
-      if(vv.height > baseHeight) baseHeight = vv.height;
-      const shrink = baseHeight - vv.height;
-      setKbOpen(shrink > 120);
-    };
-    vv.addEventListener('resize', onVVResize);
-    vv.addEventListener('scroll', onVVResize);
-  }
-
-  // Fallback / extra safety net: focus and blur on text-like inputs.
-  document.addEventListener('focusin', (e)=>{
-    const el = e.target;
-    if(el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')){
-      setKbOpen(true);
+let maxViewportHeight = window.innerHeight;
+window.addEventListener('resize', ()=>{
+  if(window.innerHeight > maxViewportHeight) maxViewportHeight = window.innerHeight;
+  if(window.innerHeight < maxViewportHeight - 150) document.body.classList.add('keyboard-open');
+  else document.body.classList.remove('keyboard-open');
+});
+document.addEventListener('focusout', ()=>{
+  setTimeout(()=>{
+    if(!document.activeElement || !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)){
+      document.body.classList.remove('keyboard-open');
     }
-  });
-  document.addEventListener('focusout', (e)=>{
-    const el = e.target;
-    if(el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')){
-      // Small delay so tapping another field doesn't cause a visible flicker.
-      setTimeout(()=>{
-        const active = document.activeElement;
-        const stillTyping = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA');
-        if(!stillTyping) setKbOpen(false);
-      }, 80);
-    }
-  });
-})();
+  }, 50);
+});
 
 /* ---------- PWA: INSTALL PROMPT ---------- */
 const INSTALL_DISMISS_KEY = 'stockline_install_dismissed';
