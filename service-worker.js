@@ -4,7 +4,7 @@
 // requires a live connection to load or save that data; this worker only
 // caches the shell (HTML/CSS/JS/icons/fonts), not any app data.
 
-const CACHE_NAME = 'stockline-shell-v12';
+const CACHE_NAME = 'stockline-shell-v13';
 
 const APP_SHELL = [
   './',

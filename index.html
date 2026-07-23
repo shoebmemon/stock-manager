@@ -1956,12 +1956,33 @@ function setupRealtime(){
     .subscribe((status, err)=>{
       console.log('[realtime] channel status:', status, err || '');
       if(status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED'){
-        // Connection dropped — clear the handle so a later call to
-        // setupRealtime() (e.g. the 'online' listener) can retry instead
-        // of being blocked by the `if(realtimeChannel) return` guard above.
+        // Connection dropped — most commonly because a mobile browser
+        // suspends the websocket when the app is backgrounded/screen
+        // locks. Clear the handle and retry shortly after, rather than
+        // silently sitting disconnected until something else (like the
+        // 'online' event, which won't fire here since the network never
+        // actually went down) happens to call setupRealtime() again.
         realtimeChannel = null;
+        if(navigator.onLine){
+          setTimeout(()=>{ setupRealtime(); }, 1000);
+        }
       }
     });
+}
+
+// Called whenever the app comes back to the foreground (tab refocused,
+// phone unlocked, PWA resumed from background). Two things can go stale
+// while backgrounded: the realtime websocket (mobile OSes routinely kill
+// it to save battery) and any changes made elsewhere while we weren't
+// listening. This reconnects the channel and does one safety-net refetch
+// so the screen is guaranteed correct the moment you look at it again,
+// instead of only ever catching up on the next live event.
+async function resumeSync(){
+  if(!navigator.onLine || !loaded) return;
+  setupRealtime(); // no-op if already connected
+  if(syncing || pendingSync) return; // don't stomp an in-flight local save
+  const ok = await fetchAndApplyRemote();
+  if(ok){ render(); updateSyncIndicator(); }
 }
 
 // Pushes the full current in-memory state to Supabase. Used both by the
@@ -2107,6 +2128,20 @@ window.addEventListener('online', ()=>{
 window.addEventListener('offline', ()=>{
   isOnline = false;
   updateSyncIndicator();
+});
+
+// Phones routinely suspend the realtime websocket (and throttle/pause the
+// tab's JS entirely) when the screen locks or the app is backgrounded —
+// that's normal OS battery-saving behavior, not something the app can
+// prevent. So instead of assuming the connection survived, treat every
+// return-to-foreground as a chance it didn't: reconnect if needed and
+// pull anything that changed while we were away. Covers switching apps,
+// locking the phone, and the "back" gesture restoring a cached page.
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState === 'visible') resumeSync();
+});
+window.addEventListener('pageshow', (e)=>{
+  if(e.persisted) resumeSync();
 });
 
 /* ---------- IMPORT / EXPORT / BACKUP ---------- */
