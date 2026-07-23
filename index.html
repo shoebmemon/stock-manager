@@ -1717,7 +1717,14 @@ function showDuplicateBatchModal(order, duplicates){
   };
 }
 
-/* ---------- OFFLINE-FIRST STORAGE ---------- */
+/* ---------- STORAGE: SUPABASE + SMALL LOCAL SNAPSHOT ---------- */
+// Supabase is the source of truth. A single small JSON snapshot is also
+// kept in localStorage — it holds only your current stocks + order history,
+// and each save OVERWRITES that same key (it never grows over time, and
+// there's no periodic background sync — it's written only on load/save,
+// and re-pushed to Supabase only once, right when connectivity returns).
+// This lets the app open instantly and work offline without using
+// meaningful device storage.
 
 const LOCAL_CACHE_KEY = 'stockline_cache_v1';
 let isOnline = navigator.onLine;
@@ -1726,56 +1733,10 @@ let syncing = false;
 
 function cacheLocally(){
   try{
-    // pendingSync is saved here too — this is what lets the app know, even
-    // after a reload, that the last change hasn't reached Supabase yet and
-    // must not be overwritten by a fresh fetch from the server.
     localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify({ stocks, orderHistory, pendingSync, cachedAt: Date.now() }));
   }catch(e){
     console.error('Failed to write local cache', e);
   }
-}
-
-// ----- "Recently added" tracking -----
-// The remote `stocks` table has no created-at column, so recency is tracked
-// here on-device, keyed by item id. Once an id gets a timestamp it keeps it
-// for the life of the item, even across reloads and remote syncs.
-const CREATED_AT_CACHE_KEY = 'stockline_created_at_v1';
-
-function loadCreatedAtMap(){
-  try{
-    return JSON.parse(localStorage.getItem(CREATED_AT_CACHE_KEY) || '{}');
-  }catch(e){
-    return {};
-  }
-}
-
-function saveCreatedAtMap(map){
-  try{
-    localStorage.setItem(CREATED_AT_CACHE_KEY, JSON.stringify(map));
-  }catch(e){
-    console.error('Failed to write created-at cache', e);
-  }
-}
-
-// Ensures every stock item has a createdAt, reusing a known timestamp for an
-// id if we've seen it before, otherwise stamping it as "now". Call this any
-// time `stocks` is repopulated from a source that may lack the field
-// (remote sync, CSV/Excel import, JSON restore).
-function reconcileCreatedAt(){
-  const map = loadCreatedAtMap();
-  let changed = false;
-  stocks.forEach(s=>{
-    if(s.createdAt){
-      if(map[s.id] !== s.createdAt){ map[s.id] = s.createdAt; changed = true; }
-    } else if(map[s.id]){
-      s.createdAt = map[s.id];
-    } else {
-      s.createdAt = new Date().toISOString();
-      map[s.id] = s.createdAt;
-      changed = true;
-    }
-  });
-  if(changed) saveCreatedAtMap(map);
 }
 
 function loadLocalCache(){
@@ -1785,6 +1746,15 @@ function loadLocalCache(){
   }catch(e){
     return null;
   }
+}
+
+// "Recently added" tracking lives in Supabase's stocks.created_at column,
+// so it survives reloads. This only backfills for a row that somehow still
+// arrives without one.
+function reconcileCreatedAt(){
+  stocks.forEach(s=>{
+    if(!s.createdAt) s.createdAt = new Date().toISOString();
+  });
 }
 
 function updateSyncIndicator(){
@@ -1806,37 +1776,48 @@ function updateSyncIndicator(){
   }
 }
 
-async function ensureSupplierId(name, phone){
-  const key = name.trim().toLowerCase();
-  if(supplierCache.has(key)) return supplierCache.get(key).id;
+// Resolves supplier ids for many (name, phone) pairs in a couple of
+// round trips total, instead of one round trip per row. Refreshes the
+// cache once (to catch suppliers created on another device), then bulk-
+// inserts any names that are still missing.
+async function ensureSupplierIds(pairs){
+  const needed = new Map(); // lowercased name -> {name, phone}
+  pairs.forEach(p=>{
+    const key = p.name.trim().toLowerCase();
+    if(!needed.has(key)) needed.set(key, { name: p.name.trim(), phone: p.phone.trim() });
+  });
 
-  // Cache miss — refresh from the DB once in case another device just
-  // created this supplier, before assuming it's genuinely new.
   const { data: all, error: selErr } = await sb.from('suppliers').select('*');
   if(selErr) throw selErr;
   supplierCache = new Map(all.map(s=> [s.name.trim().toLowerCase(), s]));
-  if(supplierCache.has(key)) return supplierCache.get(key).id;
 
-  const { data: created, error: insErr } = await sb
-    .from('suppliers')
-    .insert({ name: name.trim(), phone: phone.trim() })
-    .select()
-    .single();
-  if(insErr) throw insErr;
-  supplierCache.set(key, created);
-  return created.id;
+  const missing = [...needed.entries()]
+    .filter(([key])=> !supplierCache.has(key))
+    .map(([, p])=> p);
+
+  if(missing.length > 0){
+    const { data: created, error: insErr } = await sb.from('suppliers').insert(missing).select();
+    if(insErr) throw insErr;
+    created.forEach(s=> supplierCache.set(s.name.trim().toLowerCase(), s));
+  }
+}
+
+// Splits an array into chunks so large upserts/inserts don't send one huge
+// payload in a single request.
+function chunkArray(arr, size){
+  const out = [];
+  for(let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
 }
 
 async function loadData(){
   const cached = loadLocalCache();
   if(cached){
+    // Show the last known snapshot immediately — instant open, and works
+    // offline. pendingSync is restored too, so a reload doesn't forget that
+    // the last change hasn't reached Supabase yet.
     stocks = cached.stocks || [];
     orderHistory = cached.orderHistory || [];
-    // Restore whether the last session had unsynced changes. Without this,
-    // a reload (app relaunch, or the auto-update banner) would forget that
-    // a delete/add/edit never actually reached Supabase, and the fetch
-    // below would silently overwrite the correct local state with stale
-    // server data — e.g. a deleted item "coming back".
     pendingSync = !!cached.pendingSync;
     reconcileCreatedAt();
     loaded = true;
@@ -1850,9 +1831,8 @@ async function loadData(){
     return;
   }
 
-  // If changes from before this reload never made it to Supabase, push
-  // them first. Fetching-and-overwriting before that would throw the
-  // unsynced local changes away.
+  // Unsynced changes from before this reload go out first — fetching and
+  // overwriting before that would throw them away.
   if(pendingSync){
     await flushPendingSync();
     loaded = true;
@@ -1876,7 +1856,7 @@ async function loadData(){
 
     stocks = (stocksRes.data || []).map(s=>{
       const sup = supplierById.get(s.supplier_id) || { name:'', phone:'' };
-      return { id: s.id, name: s.name, unit: s.unit, supplierName: sup.name, supplierPhone: sup.phone };
+      return { id: s.id, name: s.name, unit: s.unit, supplierName: sup.name, supplierPhone: sup.phone, createdAt: s.created_at };
     });
     reconcileCreatedAt();
 
@@ -1919,21 +1899,24 @@ async function syncStocksToRemote(){
   const remoteIds = new Set((remote || []).map(r=> r.id));
   const localIds = new Set(stocks.map(s=> s.id));
 
-  const rows = [];
-  for(const s of stocks){
-    const supplier_id = await ensureSupplierId(s.supplierName, s.supplierPhone);
-    rows.push({ id: s.id, name: s.name, unit: s.unit, supplier_id });
-  }
+  await ensureSupplierIds(stocks.map(s=> ({ name: s.supplierName, phone: s.supplierPhone })));
 
-  if(rows.length > 0){
-    const { error: upErr } = await sb.from('stocks').upsert(rows, { onConflict: 'id' });
+  const rows = stocks.map(s=>{
+    const supplier_id = supplierCache.get(s.supplierName.trim().toLowerCase()).id;
+    return { id: s.id, name: s.name, unit: s.unit, supplier_id, created_at: s.createdAt || new Date().toISOString() };
+  });
+
+  for(const chunk of chunkArray(rows, 500)){
+    const { error: upErr } = await sb.from('stocks').upsert(chunk, { onConflict: 'id' });
     if(upErr) throw upErr;
   }
 
   const toDelete = [...remoteIds].filter(id=> !localIds.has(id));
   if(toDelete.length > 0){
-    const { error: delErr } = await sb.from('stocks').delete().in('id', toDelete);
-    if(delErr) throw delErr;
+    for(const chunk of chunkArray(toDelete, 500)){
+      const { error: delErr } = await sb.from('stocks').delete().in('id', chunk);
+      if(delErr) throw delErr;
+    }
   }
 }
 
@@ -1943,32 +1926,35 @@ async function syncOrdersToRemote(){
   const remoteIds = new Set((remote || []).map(r=> r.id));
   const localIds = new Set(orderHistory.map(o=> o.id));
 
-  const rows = [];
-  for(const o of orderHistory){
-    const supplier_id = await ensureSupplierId(o.supplierName, o.supplierPhone);
-    rows.push({ id: o.id, supplier_id, status: o.status, items: o.items, order_date: o.date, sent_date: o.sentDate || null });
-  }
+  await ensureSupplierIds(orderHistory.map(o=> ({ name: o.supplierName, phone: o.supplierPhone })));
 
-  if(rows.length > 0){
-    const { error: upErr } = await sb.from('orders').upsert(rows, { onConflict: 'id' });
+  const rows = orderHistory.map(o=>{
+    const supplier_id = supplierCache.get(o.supplierName.trim().toLowerCase()).id;
+    return { id: o.id, supplier_id, status: o.status, items: o.items, order_date: o.date, sent_date: o.sentDate || null };
+  });
+
+  for(const chunk of chunkArray(rows, 500)){
+    const { error: upErr } = await sb.from('orders').upsert(chunk, { onConflict: 'id' });
     if(upErr) throw upErr;
   }
 
   const toDelete = [...remoteIds].filter(id=> !localIds.has(id));
   if(toDelete.length > 0){
-    const { error: delErr } = await sb.from('orders').delete().in('id', toDelete);
-    if(delErr) throw delErr;
+    for(const chunk of chunkArray(toDelete, 500)){
+      const { error: delErr } = await sb.from('orders').delete().in('id', chunk);
+      if(delErr) throw delErr;
+    }
   }
 }
 
 async function saveStocks(){
-  // Always save locally first — this always succeeds, online or offline.
+  // Always save the snapshot first — this always succeeds, online or offline.
   cacheLocally();
 
   if(!navigator.onLine){
     isOnline = false;
     pendingSync = true;
-    cacheLocally(); // persist the now-true pendingSync flag itself, so a reload before we're back online still knows a sync is owed
+    cacheLocally(); // persist the now-true pendingSync flag itself
     updateSyncIndicator();
     return;
   }
@@ -1984,7 +1970,7 @@ async function saveStocks(){
     console.error('Failed to save stocks to Supabase — will retry when online', err);
     syncing = false;
     pendingSync = true;
-    cacheLocally(); // same here — a failed push must not be forgotten on reload
+    cacheLocally();
     updateSyncIndicator();
   }
 }
@@ -2016,8 +2002,9 @@ async function saveOrderHistory(){
   }
 }
 
-// Re-push everything once connectivity is confirmed, so any changes made
-// while offline reach Supabase without the user having to do anything.
+// Re-pushes everything once connectivity is confirmed, so changes made
+// while offline reach Supabase without further action. Only runs when the
+// browser fires the 'online' event or on the next save — no timer/polling.
 async function flushPendingSync(){
   if(syncing || !navigator.onLine) return;
   try{
@@ -2026,7 +2013,7 @@ async function flushPendingSync(){
     await syncStocksToRemote();
     await syncOrdersToRemote();
     pendingSync = false;
-    cacheLocally(); // persist the cleared flag — otherwise a reload right after this would think a sync is still owed, or (before this fix) the reverse: forget one that failed
+    cacheLocally();
     isOnline = true;
     showToast('Back online — changes synced');
   } catch(err){
@@ -2049,11 +2036,6 @@ window.addEventListener('offline', ()=>{
   isOnline = false;
   updateSyncIndicator();
 });
-
-// Fallback in case the browser doesn't fire 'online' reliably (common on mobile)
-setInterval(()=>{
-  if(pendingSync && navigator.onLine && !syncing) flushPendingSync();
-}, 20000);
 
 /* ---------- IMPORT / EXPORT / BACKUP ---------- */
 
@@ -2297,7 +2279,6 @@ function mergeImportedItems(rawItems){
   const existingSupplierPhones = new Map();
   getSuppliersFrom(stocks).forEach(sup=> existingSupplierPhones.set(sup.name.trim().toLowerCase(), cleanPhone(sup.phone)));
 
-  const caMap = loadCreatedAtMap();
   let added = 0, skipped = 0, conflicts = 0;
   valid.forEach(it=>{
     const nameKey = it.name.trim().toLowerCase();
@@ -2325,12 +2306,10 @@ function mergeImportedItems(rawItems){
       createdAt: new Date().toISOString()
     };
     stocks.push(newItem);
-    caMap[newItem.id] = newItem.createdAt;
     added++;
   });
 
   if(added > 0){
-    saveCreatedAtMap(caMap);
     saveStocks();
   }
   closeBackupPanel();
@@ -2449,9 +2428,6 @@ async function handleImportFullBackupFile(event){
     onConfirm: ()=>{
       stocks = newStocks;
       orderHistory = newOrders;
-      const caMap = {};
-      stocks.forEach(s=>{ caMap[s.id] = s.createdAt; });
-      saveCreatedAtMap(caMap);
       saveStocks();
       saveOrderHistory();
       closeBackupPanel();
@@ -3188,7 +3164,7 @@ function sendToWhatsApp(orderId){
   const wasActive = o.status === 'active';
 
   const header = `Order\n\nTo ${o.supplierName},\n`;
-  const body = o.items.map(li=> `• ${li.name} — ${li.qty} ${li.unit}`).join('\n\n');
+  const body = o.items.map((li, i)=> `${i + 1}. ${li.name} - ${li.qty} ${li.unit}`).join('\n\n');
   const message = `${header}\n${body}\n\nThank you!`;
 
   const phoneDigits = cleanPhone(o.supplierPhone);
@@ -3624,9 +3600,6 @@ function submitStockForm(){
   } else {
     const newItem = { id: uid(), name, unit, supplierName: sname, supplierPhone: sphone, createdAt: new Date().toISOString() };
     stocks.push(newItem);
-    const caMap = loadCreatedAtMap();
-    caMap[newItem.id] = newItem.createdAt;
-    saveCreatedAtMap(caMap);
     saveStocks();
     addingNewStock = false;
     stockFormPrefillName = '';

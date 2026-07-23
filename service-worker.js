@@ -1,9 +1,10 @@
 // Stockline service worker — caches the app shell so the app can open
 // (and show whatever was last cached) even without a network connection.
-// Item/supplier/order data itself is already handled offline separately,
-// in-page, via localStorage (see the app's own offline-first sync code).
+// Item/supplier/order data itself lives entirely in Supabase now — the app
+// requires a live connection to load or save that data; this worker only
+// caches the shell (HTML/CSS/JS/icons/fonts), not any app data.
 
-const CACHE_NAME = 'stockline-shell-v10';
+const CACHE_NAME = 'stockline-shell-v11';
 
 const APP_SHELL = [
   './',
