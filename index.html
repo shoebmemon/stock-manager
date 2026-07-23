@@ -330,6 +330,7 @@
     font-family:'IBM Plex Mono', monospace;
   }
   .search-wrap.has-add-btn input{ padding-right:42px; }
+  .search-wrap.no-icon input{ padding-left:12px; }
   .search-wrap .add-icon-btn{
     position:absolute;
     right:6px; top:50%;
@@ -685,6 +686,22 @@
   .select-bar .sb-count{
     font-family:'Space Grotesk', sans-serif; font-weight:600; font-size:14px; color:var(--ink);
   }
+  .select-bar .sb-selectall{
+    background:none;
+    border:1px solid var(--line);
+    color:var(--ink-soft);
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11.5px;
+    font-weight:600;
+    letter-spacing:.03em;
+    text-transform:uppercase;
+    cursor:pointer;
+    padding:6px 10px;
+    border-radius:20px;
+    flex-shrink:0;
+  }
+  .select-bar .sb-selectall:hover{ border-color:var(--ink-soft); color:var(--ink); }
+  .select-bar .sb-selectall:active{ transform:scale(0.96); }
   .select-bar .sb-delete{
     width:38px;
     height:38px;
@@ -1070,6 +1087,13 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // Local cache: lowercase-trimmed supplier name -> { id, name, phone }
 let supplierCache = new Map();
+
+// True on phones/tablets (where tapping a text field pops up a virtual
+// keyboard) and false on desktop/laptop (mouse + physical keyboard, no
+// on-screen keyboard to avoid). Used to decide whether the supplier-stock
+// search should open "browse first, type on a second tap" or just work
+// like a normal search box.
+const IS_TOUCH_DEVICE = window.matchMedia('(pointer: coarse)').matches;
 
 let stocks = [];
 let orderHistory = [];
@@ -1509,7 +1533,10 @@ let syncing = false;
 
 function cacheLocally(){
   try{
-    localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify({ stocks, orderHistory, cachedAt: Date.now() }));
+    // pendingSync is saved here too — this is what lets the app know, even
+    // after a reload, that the last change hasn't reached Supabase yet and
+    // must not be overwritten by a fresh fetch from the server.
+    localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify({ stocks, orderHistory, pendingSync, cachedAt: Date.now() }));
   }catch(e){
     console.error('Failed to write local cache', e);
   }
@@ -1612,6 +1639,12 @@ async function loadData(){
   if(cached){
     stocks = cached.stocks || [];
     orderHistory = cached.orderHistory || [];
+    // Restore whether the last session had unsynced changes. Without this,
+    // a reload (app relaunch, or the auto-update banner) would forget that
+    // a delete/add/edit never actually reached Supabase, and the fetch
+    // below would silently overwrite the correct local state with stale
+    // server data — e.g. a deleted item "coming back".
+    pendingSync = !!cached.pendingSync;
     reconcileCreatedAt();
     loaded = true;
     render();
@@ -1620,6 +1653,17 @@ async function loadData(){
   if(!navigator.onLine){
     isOnline = false;
     if(!cached){ stocks = []; orderHistory = []; loaded = true; render(); }
+    updateSyncIndicator();
+    return;
+  }
+
+  // If changes from before this reload never made it to Supabase, push
+  // them first. Fetching-and-overwriting before that would throw the
+  // unsynced local changes away.
+  if(pendingSync){
+    await flushPendingSync();
+    loaded = true;
+    render();
     updateSyncIndicator();
     return;
   }
@@ -1731,6 +1775,7 @@ async function saveStocks(){
   if(!navigator.onLine){
     isOnline = false;
     pendingSync = true;
+    cacheLocally(); // persist the now-true pendingSync flag itself, so a reload before we're back online still knows a sync is owed
     updateSyncIndicator();
     return;
   }
@@ -1746,6 +1791,7 @@ async function saveStocks(){
     console.error('Failed to save stocks to Supabase — will retry when online', err);
     syncing = false;
     pendingSync = true;
+    cacheLocally(); // same here — a failed push must not be forgotten on reload
     updateSyncIndicator();
   }
 }
@@ -1756,6 +1802,7 @@ async function saveOrderHistory(){
   if(!navigator.onLine){
     isOnline = false;
     pendingSync = true;
+    cacheLocally();
     updateSyncIndicator();
     return;
   }
@@ -1771,6 +1818,7 @@ async function saveOrderHistory(){
     console.error('Failed to save orders to Supabase — will retry when online', err);
     syncing = false;
     pendingSync = true;
+    cacheLocally();
     updateSyncIndicator();
   }
 }
@@ -1785,11 +1833,13 @@ async function flushPendingSync(){
     await syncStocksToRemote();
     await syncOrdersToRemote();
     pendingSync = false;
+    cacheLocally(); // persist the cleared flag — otherwise a reload right after this would think a sync is still owed, or (before this fix) the reverse: forget one that failed
     isOnline = true;
     showToast('Back online — changes synced');
   } catch(err){
     console.error('Retry sync failed, will try again later', err);
     pendingSync = true;
+    cacheLocally();
   } finally{
     syncing = false;
     updateSyncIndicator();
@@ -2349,8 +2399,7 @@ function renderOrderPicker(){
     <div class="section-label"><span class="left"><h2>Add to order</h2></span></div>
     <div class="card">
       <label for="f-order-search">Search & select item</label>
-      <div class="search-wrap">
-        <span class="sicon">⌕</span>
+      <div class="search-wrap no-icon">
         <input id="f-order-search" placeholder="Type item name to filter…" autocomplete="off"
           value="${escapeHtml(orderSearchQuery)}"
           oninput="orderSearchQuery=this.value; orderSelectedItemId=null; renderOrderSearchResults(); updateOrderQtyUnitBadge(null)">
@@ -2388,7 +2437,7 @@ function renderOrderSearchResults(){
   const matches = stocks.filter(s=> s.name.toLowerCase().includes(q)).slice(0, 8);
 
   if(matches.length === 0){
-    wrap.innerHTML = `<div class="search-results"><div class="sr-empty sr-empty-tap" onclick="openAddStockPage(orderSearchQuery)">No matching items — tap here to add one.</div></div>`;
+    wrap.innerHTML = `<div class="search-results"><div class="sr-empty sr-empty-tap" onclick="openAddStockPage(orderSearchQuery)">Tap here to add item</div></div>`;
     return;
   }
 
@@ -2504,7 +2553,7 @@ function renderStockForm(){
       <input id="f-name" autocomplete="off" value="${editing ? escapeHtml(editing.name) : escapeHtml(stockFormPrefillName)}">
 
       <label for="f-unit">Unit</label>
-      <input id="f-unit" autocomplete="off" maxlength="4" value="${editing ? escapeHtml(editing.unit) : ''}"
+      <input id="f-unit" autocomplete="off" maxlength="3" value="${editing ? escapeHtml(editing.unit) : ''}"
         oninput="sanitizeUnitField(this)">
 
       <label for="f-sname">Supplier name</label>
@@ -2990,9 +3039,9 @@ function renderOrderDetail(){
       <div class="section-label"><span class="left"><span class="num">·</span><h2>Add another item</h2></span></div>
       <div class="search-wrap">
         <span class="sicon">⌕</span>
-        <input id="f-orderdetail-search" placeholder="Search this supplier's stock…" autocomplete="off"
+        <input id="f-orderdetail-search" placeholder="Search this supplier's stock…" autocomplete="off" ${IS_TOUCH_DEVICE ? 'readonly' : ''}
           value="${escapeHtml(orderDetailSearch)}" oninput="orderDetailSearch=this.value; renderOrderDetailAddResults()"
-          onfocus="orderDetailAddOpen=true; renderOrderDetailAddResults()">
+          onfocus="orderDetailAddOpen=true; renderOrderDetailAddResults(); this.removeAttribute('readonly')">
       </div>
       <div id="orderDetailAddResultsWrap"></div>
     `;
@@ -3118,12 +3167,15 @@ function addItemToOrderDetail(stockId){
 function renderStocks(){
   let html = '';
   if(stockSelectionMode){
+    const visibleIds = getFilteredSortedStocks().map(s=> s.id);
+    const allSelected = visibleIds.length > 0 && visibleIds.every(id=> selectedStockIds.has(id));
     html += `
       <div class="select-bar">
         <div class="sb-left">
           <button class="sb-cancel" title="Cancel selection" onclick="cancelStockSelection()">✕</button>
           <span class="sb-count">${selectedStockIds.size} selected</span>
         </div>
+        <button class="sb-selectall" onclick="toggleSelectAllStocks()">${allSelected ? 'Deselect all' : 'Select all'}</button>
         <button class="sb-delete" title="Delete selected" onclick="deleteSelectedStocks()" ${selectedStockIds.size === 0 ? 'disabled' : ''}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 20 7"/><path d="M6 7V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2"/><path d="M19 7l-1 13a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 7"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>
       </div>
     `;
@@ -3272,6 +3324,13 @@ function toggleStockSelection(id){
   render();
 }
 
+function toggleSelectAllStocks(){
+  const visibleIds = getFilteredSortedStocks().map(s=> s.id);
+  const allSelected = visibleIds.length > 0 && visibleIds.every(id=> selectedStockIds.has(id));
+  selectedStockIds = allSelected ? new Set() : new Set(visibleIds);
+  render();
+}
+
 function cancelStockSelection(){
   stockSelectionMode = false;
   selectedStockIds = new Set();
@@ -3405,12 +3464,15 @@ function renderSuppliersDirectory(){
   let html = '';
 
   if(supplierSelectionMode){
+    const visibleKeys = getFilteredSuppliers().map(sup=> supplierKey(sup.name, sup.phone));
+    const allSelected = visibleKeys.length > 0 && visibleKeys.every(k=> selectedSupplierKeys.has(k));
     html += `
       <div class="select-bar">
         <div class="sb-left">
           <button class="sb-cancel" title="Cancel selection" onclick="cancelSupplierSelection()">✕</button>
           <span class="sb-count">${selectedSupplierKeys.size} selected</span>
         </div>
+        <button class="sb-selectall" onclick="toggleSelectAllSuppliers()">${allSelected ? 'Deselect all' : 'Select all'}</button>
         <button class="sb-delete" title="Delete selected" onclick="deleteSelectedSuppliers()" ${selectedSupplierKeys.size === 0 ? 'disabled' : ''}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 20 7"/><path d="M6 7V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2"/><path d="M19 7l-1 13a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 7"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>
       </div>
     `;
@@ -3562,6 +3624,13 @@ function toggleSupplierSelection(key){
   render();
 }
 
+function toggleSelectAllSuppliers(){
+  const visibleKeys = getFilteredSuppliers().map(sup=> supplierKey(sup.name, sup.phone));
+  const allSelected = visibleKeys.length > 0 && visibleKeys.every(k=> selectedSupplierKeys.has(k));
+  selectedSupplierKeys = allSelected ? new Set() : new Set(visibleKeys);
+  render();
+}
+
 function cancelSupplierSelection(){
   supplierSelectionMode = false;
   selectedSupplierKeys = new Set();
@@ -3707,23 +3776,45 @@ function renderSupplierStockList(){
   const sup = suppliers.find(s=> supplierKey(s.name, s.phone) === supplierStocksViewKey);
   if(!sup){ supplierStocksViewKey = null; render(); return; }
 
-  let html = `
+  const supplierItemIds = sup.items.map(item=> item.id);
+
+  let html = '';
+
+  if(stockSelectionMode){
+    const allSelected = supplierItemIds.length > 0 && supplierItemIds.every(id=> selectedStockIds.has(id));
+    html += `
+      <div class="select-bar">
+        <div class="sb-left">
+          <button class="sb-cancel" title="Cancel selection" onclick="cancelStockSelection()">✕</button>
+          <span class="sb-count">${selectedStockIds.size} selected</span>
+        </div>
+        <button class="sb-selectall" onclick="toggleSelectAllSupplierStocks()">${allSelected ? 'Deselect all' : 'Select all'}</button>
+        <button class="sb-delete" title="Delete selected" onclick="deleteSelectedStocks()" ${selectedStockIds.size === 0 ? 'disabled' : ''}><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 7 20 7"/><path d="M6 7V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v2"/><path d="M19 7l-1 13a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 7"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg></button>
+      </div>
+    `;
+  }
+
+  html += `
     <div class="review-header">
       <button class="back-btn" onclick="closeSupplierStocksView()">←</button>
       <div class="who">
         <h2>${escapeHtml(sup.name)}</h2>
         <div class="ph">${escapeHtml(sup.phone)}</div>
       </div>
-      <button class="icon-btn" title="Edit supplier" onclick="startEditSupplier('${supplierStocksViewKey}')">✎</button>
+      ${stockSelectionMode ? '' : `
+        <button class="icon-btn" title="Select items" onclick="enterSupplierStockSelection()"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 20 6"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h11"/></svg></button>
+        <button class="icon-btn" title="Edit supplier" onclick="startEditSupplier('${supplierStocksViewKey}')">✎</button>
+      `}
     </div>
     <div class="section-label"><span class="left"><span class="num">·</span><h2>Items (${sup.items.length})</h2></span></div>
-    <p class="section-sub">Tap an item to add a quantity to your order.</p>
+    <p class="section-sub">${stockSelectionMode ? 'Tap items to select, then use the delete button above.' : 'Tap an item to add a quantity to your order.'}</p>
     <div class="list-card">
   `;
 
   sup.items.forEach((item, i)=>{
+    const isSelected = stockSelectionMode && selectedStockIds.has(item.id);
     html += `
-      <div class="ledger-row" style="cursor:pointer"
+      <div class="ledger-row ${stockSelectionMode ? 'selecting' : ''} ${isSelected ? 'selected' : ''}" style="cursor:pointer"
         onmousedown="handleSupplierStockPointerDown('${item.id}')"
         onmouseup="handleSupplierStockPointerUp('${item.id}')"
         onmouseleave="handleSupplierStockPointerUp('${item.id}')"
@@ -3732,7 +3823,9 @@ function renderSupplierStockList(){
         ontouchmove="handleSupplierStockPointerUp('${item.id}')"
         oncontextmenu="return false"
         onclick="handleSupplierStockClick('${item.id}')">
-        <span class="idx">${String(i+1).padStart(3,'0')}</span>
+        ${stockSelectionMode
+          ? `<div class="row-check ${isSelected ? 'checked' : ''}"></div>`
+          : `<span class="idx">${String(i+1).padStart(3,'0')}</span>`}
         <div class="info">
           <div class="name">${escapeHtml(item.name)}</div>
           <div class="meta">${escapeHtml(sup.name)}</div>
@@ -3744,12 +3837,30 @@ function renderSupplierStockList(){
 
   html += '</div>';
   mainEl.innerHTML = html;
+  positionSelectBar();
+}
+
+function enterSupplierStockSelection(){
+  stockSelectionMode = true;
+  selectedStockIds = new Set();
+  render();
+}
+
+function toggleSelectAllSupplierStocks(){
+  const suppliers = getSuppliers();
+  const sup = suppliers.find(s=> supplierKey(s.name, s.phone) === supplierStocksViewKey);
+  if(!sup) return;
+  const supplierItemIds = sup.items.map(item=> item.id);
+  const allSelected = supplierItemIds.length > 0 && supplierItemIds.every(id=> selectedStockIds.has(id));
+  selectedStockIds = allSelected ? new Set() : new Set(supplierItemIds);
+  render();
 }
 
 function handleSupplierStockPointerDown(id, e){
   longPressFired = false;
   clearTimeout(longPressTimer);
   recordPointerDown(e);
+  if(stockSelectionMode) return; // long-press-to-edit only applies outside selection mode
   longPressTimer = setTimeout(()=>{
     longPressFired = true;
     startEditStock(id);
@@ -3762,13 +3873,17 @@ function handleSupplierStockPointerUp(id, e){
   if(longPressFired){ longPressFired = false; return; }
   if(isCleanTap(e)){
     e.preventDefault();
-    openAddModal(id);
+    handleSupplierStockClick(id);
   }
 }
 
 function handleSupplierStockClick(id){
   if(longPressFired){ longPressFired = false; return; }
-  openAddModal(id);
+  if(stockSelectionMode){
+    toggleStockSelection(id);
+  } else {
+    openAddModal(id);
+  }
 }
 
 function openAddModal(itemId){
