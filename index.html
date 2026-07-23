@@ -3966,16 +3966,21 @@ loadData();
 /* ---------- KEYBOARD-AWARE SCROLLING ----------
    On mobile, the on-screen keyboard covers the lower part of the screen
    without shrinking the page layout. That can hide the field someone is
-   typing into behind the keyboard, with no way to scroll it into view
-   since `main` isn't actually overflowing.
-   Fix: when the keyboard opens, give `main` a small amount of extra
-   scrollable room and nudge the focused field into view — once. The
-   previous version computed its own scroll distance and called
-   `scrollBy` on every single viewport event (including plain scrolling
-   while the keyboard was open), which fought with the browser's own
-   native "scroll focused field into view" behavior and compounded into
-   a large empty gap at the bottom. Doing it once per focus, via the
-   browser's own scrollIntoView, avoids that entirely. */
+   typing into — or content below it, like a results list — behind the
+   keyboard, with no way to scroll it into view since `main` isn't
+   actually overflowing enough to allow it.
+   Fix: only reserve extra scrollable room when real content is actually
+   taller than what's visible above the keyboard (checked by comparing
+   `main`'s true content height against the effective visible height with
+   the keyboard's own padding stripped out first, so we're never measuring
+   padding we added ourselves on a previous pass). On a short page with
+   nothing left below the fold, no padding is added at all. On a page with
+   a genuinely taller list, exactly enough room is added to drag the rest
+   of it into view. The focused field itself is nudged into view once per
+   tap via the browser's native scrollIntoView, rather than our own
+   distance math + scrollBy on every viewport event — the previous
+   approach recalculated on every scroll while the keyboard was open and
+   compounded into a large empty gap. */
 let keyboardOpen = false;
 let keyboardAdjustedFor = null; // tracks which focused element we've already nudged into view, so repeat viewport events (e.g. from scrolling) don't re-trigger it
 function handleKeyboardViewportChange(){
@@ -3986,13 +3991,18 @@ function handleKeyboardViewportChange(){
 
   if(nowOpen){
     keyboardOpen = true;
+
+    // Measure the real content height with any padding we previously
+    // added stripped out first — otherwise we'd be comparing content
+    // against a height that's already inflated by our own last pass.
+    mainEl.style.paddingBottom = '';
+    const naturalContentHeight = mainEl.scrollHeight;
+    const effectiveVisibleHeight = mainEl.clientHeight - heightDiff;
+    const contentObscured = naturalContentHeight > effectiveVisibleHeight;
+    mainEl.style.paddingBottom = contentObscured ? (heightDiff + 8) + 'px' : '';
+
     const active = document.activeElement;
     const isActiveInsideMain = active && mainEl.contains(active) && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA');
-
-    // A small, constant safety margin — not sized to the keyboard height —
-    // so a field near the bottom of short content has a little room to
-    // clear the keyboard without leaving a large empty area below it.
-    mainEl.style.paddingBottom = isActiveInsideMain ? '16px' : '';
 
     const openOverlays = document.querySelectorAll('.modal-overlay.show, .confirm-overlay.show');
     const modalIsOpen = openOverlays.length > 0;
