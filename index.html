@@ -3507,7 +3507,7 @@ function renderStocksList(){
   }
 
   let html = '<div class="list-card">';
-  const visible = list.slice(0, stocksRenderLimit);
+  const visible = list; // render everything up front — no more scroll-triggered batching
   visible.forEach((s, i)=>{
     const isSelected = inSelection && selectedStockIds.has(s.id);
     html += `
@@ -3532,22 +3532,7 @@ function renderStocksList(){
     `;
   });
   html += '</div>';
-  if(list.length > visible.length){
-    html += `<div id="stocksSentinel" class="load-sentinel">Loading more items…</div>`;
-  }
   wrap.innerHTML = html;
-
-  if(stocksIO){ stocksIO.disconnect(); stocksIO = null; }
-  const sentinel = document.getElementById('stocksSentinel');
-  if(sentinel){
-    stocksIO = new IntersectionObserver((entries)=>{
-      if(entries[0].isIntersecting){
-        stocksRenderLimit += RENDER_BATCH;
-        renderStocksList();
-      }
-    }, { rootMargin: '600px' });
-    stocksIO.observe(sentinel);
-  }
 }
 
 /* ---------- STOCKS MULTI-SELECT (long-press, WhatsApp style) ---------- */
