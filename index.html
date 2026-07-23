@@ -1838,9 +1838,23 @@ async function loadData(){
     loaded = true;
     render();
     updateSyncIndicator();
+    setupRealtime();
     return;
   }
 
+  const ok = await fetchAndApplyRemote({ cached });
+  loaded = true;
+  render();
+  updateSyncIndicator();
+  if(ok) setupRealtime();
+}
+
+// Fetches the full current state from Supabase and applies it to the local
+// in-memory state (stocks/orderHistory/supplierCache). Used both by the
+// initial load and by the realtime subscription below, so that any change
+// made on another device — including deletes — is reflected here without
+// needing a manual refresh. Returns true on success, false on failure.
+async function fetchAndApplyRemote({ cached } = {}){
   try{
     const [suppliersRes, stocksRes, ordersRes] = await Promise.all([
       sb.from('suppliers').select('*'),
@@ -1877,6 +1891,7 @@ async function loadData(){
     isOnline = true;
     pendingSync = false;
     cacheLocally();
+    return true;
   } catch(err){
     console.error('Failed to load from Supabase', err);
     isOnline = false;
@@ -1885,10 +1900,42 @@ async function loadData(){
       orderHistory = [];
       showToast('Could not load data — check your connection');
     }
+    return false;
   }
-  loaded = true;
-  render();
-  updateSyncIndicator();
+}
+
+// ---------- REALTIME ----------
+// Subscribes to changes on the stocks/orders/suppliers tables so that an
+// edit or delete made on one device shows up on every other open device
+// without anyone needing to pull-to-refresh. Requires Realtime to be
+// turned on for these tables in the Supabase project (Database ->
+// Replication), otherwise this silently receives no events.
+let realtimeChannel = null;
+let realtimeRefreshTimer = null;
+
+function setupRealtime(){
+  if(realtimeChannel) return; // already subscribed
+
+  const scheduleRefresh = ()=>{
+    // Debounce: a bulk delete/import fires many events in quick succession,
+    // so wait for them to settle before doing one refetch instead of many.
+    clearTimeout(realtimeRefreshTimer);
+    realtimeRefreshTimer = setTimeout(async ()=>{
+      // Don't stomp on an in-flight local save — it will persist its own
+      // result via cacheLocally, and pulling mid-save could momentarily
+      // show stale/half-written data.
+      if(syncing || pendingSync) return;
+      const ok = await fetchAndApplyRemote();
+      if(ok){ render(); updateSyncIndicator(); }
+    }, 400);
+  };
+
+  realtimeChannel = sb
+    .channel('stockline-changes')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'stocks' }, scheduleRefresh)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, scheduleRefresh)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'suppliers' }, scheduleRefresh)
+    .subscribe();
 }
 
 // Pushes the full current in-memory state to Supabase. Used both by the
@@ -2030,6 +2077,7 @@ window.addEventListener('online', ()=>{
   isOnline = true;
   updateSyncIndicator();
   if(pendingSync) flushPendingSync();
+  setupRealtime();
 });
 
 window.addEventListener('offline', ()=>{
