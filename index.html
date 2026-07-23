@@ -59,6 +59,75 @@
     position:relative;
   }
 
+  .lock-screen{
+    position:fixed;
+    inset:0;
+    z-index:1000;
+    background:var(--ink);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+  }
+  .lock-screen.hidden{ display:none; }
+  .lock-card{
+    width:100%;
+    max-width:340px;
+    text-align:center;
+  }
+  .lock-card h1{
+    font-family:'Space Grotesk', sans-serif;
+    font-weight:700;
+    font-size:28px;
+    color:var(--paper);
+    margin:0 0 6px 0;
+  }
+  .lock-card h1 .mark{ color:var(--amber); }
+  .lock-sub{
+    font-family:'IBM Plex Sans', sans-serif;
+    font-size:13.5px;
+    color:#AEB6C2;
+    margin:0 0 22px 0;
+  }
+  .lock-input{
+    width:100%;
+    text-align:center;
+    letter-spacing:2px;
+    padding:13px 12px;
+    border:1px solid #3A4658;
+    border-radius:7px;
+    background:var(--ink-soft);
+    color:var(--paper);
+    font-family:'IBM Plex Mono', monospace;
+    font-size:16px;
+  }
+  .lock-input::placeholder{ color:#7C899B; letter-spacing:0; }
+  .lock-input:focus{
+    outline:2px solid var(--amber);
+    outline-offset:1px;
+    border-color:var(--amber);
+  }
+  .lock-error{
+    font-family:'IBM Plex Sans', sans-serif;
+    font-size:12.5px;
+    color:#E88A73;
+    margin:10px 0 0 0;
+  }
+  .lock-btn{
+    width:100%;
+    margin-top:16px;
+    padding:13px;
+    border:none;
+    border-radius:7px;
+    background:var(--amber);
+    color:var(--ink);
+    font-family:'IBM Plex Sans', sans-serif;
+    font-weight:600;
+    font-size:14.5px;
+    cursor:pointer;
+  }
+  .lock-btn:active{ transform:scale(0.98); }
+
   header.top{
     background:var(--ink);
     color:var(--paper);
@@ -1011,6 +1080,23 @@
 </style>
 </head>
 <body>
+<div class="lock-screen" id="lockScreen">
+  <div class="lock-card">
+    <h1>Stock<span class="mark">line</span></h1>
+    <p class="lock-sub">Enter passcode to continue</p>
+    <form id="lockForm" autocomplete="on" onsubmit="return handleLockSubmit(event)">
+      <!-- Hidden username field: most browsers' password managers only
+           offer to save/fill a credential if there's a username field
+           alongside the password field, even if the "username" here is
+           just a fixed constant since this app only has one shared passcode. -->
+      <input type="text" name="username" autocomplete="username" value="stockline" style="position:absolute; width:1px; height:1px; opacity:0; pointer-events:none;" tabindex="-1">
+      <input id="lockPasscodeInput" class="lock-input" type="password" name="password" inputmode="text" autocomplete="current-password"
+        placeholder="Passcode">
+      <p class="lock-error" id="lockError" style="display:none;">Incorrect passcode. Try again.</p>
+      <button class="lock-btn" type="submit">Unlock</button>
+    </form>
+  </div>
+</div>
 <div class="app">
   <header class="top">
     <div class="brand"
@@ -1117,6 +1203,68 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
+/* ---------- PASSCODE LOCK SCREEN ----------
+   The passcode itself is never stored in this file — it lives only in
+   Supabase, as a hashed value inside a table that's locked down with Row
+   Level Security so it can't be read directly over the API. Unlocking
+   calls a Postgres function (verify_passcode) that checks the entered
+   code against that hash server-side and returns only true/false; the
+   real value never crosses the network in either direction after setup.
+   See the SQL provided alongside this file for the one-time Supabase setup.
+   Unlocking is remembered for the current browser session (sessionStorage),
+   so it asks again next time the app is actually opened/launched, but not
+   on every internal re-render. */
+function handleLockSubmit(event){
+  event.preventDefault(); // stop an actual page navigation — this is a single-page app
+  attemptUnlock();
+  return false;
+}
+
+async function attemptUnlock(){
+  const input = document.getElementById('lockPasscodeInput');
+  const errorEl = document.getElementById('lockError');
+  const btn = document.querySelector('.lock-btn');
+  const code = input.value.trim();
+  if(!code) return;
+
+  btn.disabled = true;
+  btn.textContent = 'Checking…';
+  errorEl.style.display = 'none';
+
+  try{
+    const { data, error } = await sb.rpc('verify_passcode', { input_code: code });
+    if(error) throw error;
+
+    if(data === true){
+      sessionStorage.setItem('stockline_unlocked', '1');
+      document.getElementById('lockScreen').classList.add('hidden');
+    } else {
+      errorEl.textContent = 'Incorrect passcode. Try again.';
+      errorEl.style.display = 'block';
+      input.value = '';
+      input.focus();
+    }
+  } catch(err){
+    console.error('Passcode check failed', err);
+    errorEl.textContent = 'Could not verify right now — check your connection and try again.';
+    errorEl.style.display = 'block';
+  } finally{
+    btn.disabled = false;
+    btn.textContent = 'Unlock';
+  }
+}
+
+(function initLockScreen(){
+  if(sessionStorage.getItem('stockline_unlocked') === '1'){
+    document.getElementById('lockScreen').classList.add('hidden');
+  } else {
+    setTimeout(()=>{
+      const input = document.getElementById('lockPasscodeInput');
+      if(input) input.focus();
+    }, 50);
+  }
+})();
+
 /* ---------- SUPABASE ---------- */
 
 const SUPABASE_URL = "https://yelntqtohnqtfintfpbc.supabase.co";
@@ -3160,7 +3308,7 @@ function renderOrderDetailItems(){
             <div class="qname">${escapeHtml(li.name)}</div>
             <div class="qunit">unit: ${escapeHtml(li.unit)}</div>
           </div>
-          <div style="font-family:'IBM Plex Mono', monospace; font-weight:600; font-size:14px; color:var(--ink);">${li.qty} <span style="font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.3px; color:var(--slate);">${escapeHtml(li.unit)}</span></div>
+          <div style="font-family:'IBM Plex Mono', monospace; font-weight:600; font-size:14px; color:var(--ink);">${li.qty}<span style="margin-left:3px; font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:0.3px; color:var(--slate);">${escapeHtml(li.unit)}</span></div>
         </div>
       `;
     }
