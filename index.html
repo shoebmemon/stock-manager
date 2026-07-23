@@ -1787,8 +1787,7 @@ async function ensureSupplierIds(pairs){
     if(!needed.has(key)) needed.set(key, { name: p.name.trim(), phone: p.phone.trim() });
   });
 
-  const { data: all, error: selErr } = await sb.from('suppliers').select('*');
-  if(selErr) throw selErr;
+  const all = await fetchAllRows('suppliers', '*');
   supplierCache = new Map(all.map(s=> [s.name.trim().toLowerCase(), s]));
 
   const missing = [...needed.entries()]
@@ -1808,6 +1807,28 @@ function chunkArray(arr, size){
   const out = [];
   for(let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
   return out;
+}
+
+// Supabase/PostgREST caps any single select() at a max-rows setting
+// (1000 by default, sometimes lower, and effectively lower still once a
+// row's payload — e.g. an order's items array — gets large). A plain
+// .select('*') on a big table silently returns only the first page with
+// no error, which is how deletes/data went "missing". This paginates with
+// .range() until a page comes back short, guaranteeing every row is
+// fetched no matter the table size or the project's max-rows setting.
+const FETCH_PAGE_SIZE = 500;
+async function fetchAllRows(table, columns){
+  let rows = [];
+  let from = 0;
+  while(true){
+    const to = from + FETCH_PAGE_SIZE - 1;
+    const { data, error } = await sb.from(table).select(columns).order('id').range(from, to);
+    if(error) throw error;
+    rows = rows.concat(data || []);
+    if(!data || data.length < FETCH_PAGE_SIZE) break;
+    from += FETCH_PAGE_SIZE;
+  }
+  return rows;
 }
 
 async function loadData(){
@@ -1856,25 +1877,22 @@ async function loadData(){
 // needing a manual refresh. Returns true on success, false on failure.
 async function fetchAndApplyRemote({ cached } = {}){
   try{
-    const [suppliersRes, stocksRes, ordersRes] = await Promise.all([
-      sb.from('suppliers').select('*'),
-      sb.from('stocks').select('*'),
-      sb.from('orders').select('*')
+    const [suppliersData, stocksData, ordersData] = await Promise.all([
+      fetchAllRows('suppliers', '*'),
+      fetchAllRows('stocks', '*'),
+      fetchAllRows('orders', '*')
     ]);
-    if(suppliersRes.error) throw suppliersRes.error;
-    if(stocksRes.error) throw stocksRes.error;
-    if(ordersRes.error) throw ordersRes.error;
 
-    const supplierById = new Map((suppliersRes.data || []).map(s=> [s.id, s]));
-    supplierCache = new Map((suppliersRes.data || []).map(s=> [s.name.trim().toLowerCase(), s]));
+    const supplierById = new Map(suppliersData.map(s=> [s.id, s]));
+    supplierCache = new Map(suppliersData.map(s=> [s.name.trim().toLowerCase(), s]));
 
-    stocks = (stocksRes.data || []).map(s=>{
+    stocks = stocksData.map(s=>{
       const sup = supplierById.get(s.supplier_id) || { name:'', phone:'' };
       return { id: s.id, name: s.name, unit: s.unit, supplierName: sup.name, supplierPhone: sup.phone, createdAt: s.created_at };
     });
     reconcileCreatedAt();
 
-    orderHistory = (ordersRes.data || []).map(o=>{
+    orderHistory = ordersData.map(o=>{
       const sup = supplierById.get(o.supplier_id) || { name:'', phone:'' };
       return {
         id: o.id,
@@ -1932,18 +1950,25 @@ function setupRealtime(){
 
   realtimeChannel = sb
     .channel('stockline-changes')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'stocks' }, scheduleRefresh)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, scheduleRefresh)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'suppliers' }, scheduleRefresh)
-    .subscribe();
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'stocks' }, (payload)=>{ console.log('[realtime] stocks event', payload.eventType, payload); scheduleRefresh(); })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload)=>{ console.log('[realtime] orders event', payload.eventType, payload); scheduleRefresh(); })
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'suppliers' }, (payload)=>{ console.log('[realtime] suppliers event', payload.eventType, payload); scheduleRefresh(); })
+    .subscribe((status, err)=>{
+      console.log('[realtime] channel status:', status, err || '');
+      if(status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED'){
+        // Connection dropped — clear the handle so a later call to
+        // setupRealtime() (e.g. the 'online' listener) can retry instead
+        // of being blocked by the `if(realtimeChannel) return` guard above.
+        realtimeChannel = null;
+      }
+    });
 }
 
 // Pushes the full current in-memory state to Supabase. Used both by the
 // normal save functions and by the retry logic once connectivity returns.
 async function syncStocksToRemote(){
-  const { data: remote, error: selErr } = await sb.from('stocks').select('id');
-  if(selErr) throw selErr;
-  const remoteIds = new Set((remote || []).map(r=> r.id));
+  const remote = await fetchAllRows('stocks', 'id');
+  const remoteIds = new Set(remote.map(r=> r.id));
   const localIds = new Set(stocks.map(s=> s.id));
 
   await ensureSupplierIds(stocks.map(s=> ({ name: s.supplierName, phone: s.supplierPhone })));
@@ -1968,9 +1993,8 @@ async function syncStocksToRemote(){
 }
 
 async function syncOrdersToRemote(){
-  const { data: remote, error: selErr } = await sb.from('orders').select('id');
-  if(selErr) throw selErr;
-  const remoteIds = new Set((remote || []).map(r=> r.id));
+  const remote = await fetchAllRows('orders', 'id');
+  const remoteIds = new Set(remote.map(r=> r.id));
   const localIds = new Set(orderHistory.map(o=> o.id));
 
   await ensureSupplierIds(orderHistory.map(o=> ({ name: o.supplierName, phone: o.supplierPhone })));
