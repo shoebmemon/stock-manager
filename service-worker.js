@@ -4,7 +4,7 @@
 // requires a live connection to load or save that data; this worker only
 // caches the shell (HTML/CSS/JS/icons/fonts), not any app data.
 
-const CACHE_NAME = 'stockline-shell-v19';
+const CACHE_NAME = 'stockline-shell-v21';
 
 const APP_SHELL = [
   './',
@@ -19,7 +19,8 @@ const APP_SHELL = [
 const THIRD_PARTY = [
   'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap',
   'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js',
-  'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'
+  'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js',
+  'https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js'
 ];
 
 self.addEventListener('message', (event)=>{

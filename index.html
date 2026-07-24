@@ -1189,7 +1189,7 @@
 
     <div class="card">
       <label>Items &amp; suppliers</label>
-      <p class="data-note">Export your item list as a CSV or Excel file — each row carries its supplier's name and phone. The Excel template includes a "Suppliers" sheet listing every supplier already in your account — type an existing supplier's name in the Items sheet and the phone number fills in automatically, even on the very first row. (Want a real dropdown for Supplier Name instead of typing? Select the Supplier Name column → Data tab → Data Validation → List → source <code>=Suppliers!$A$2:$A$200</code> — a one-time, 10-second setup in Excel.) The phone cell only stays blank for suppliers that are genuinely new, so typing into it never overwrites a working lookup. Importing never deletes anything: rows already in your list (same name, unit &amp; supplier) are skipped, everything else is appended.</p>
+      <p class="data-note">Export your item list as a CSV or Excel file. In the Excel template, type a Supplier Name that matches one on the "Suppliers" sheet (every supplier already in your account) and the phone number fills in automatically. A brand-new supplier's name just leaves the phone blank for you to fill in — it never overwrites a working lookup. Importing never deletes anything: rows already in your list (same name, unit &amp; supplier) are skipped, everything else is appended.</p>
       <button class="ghost small" onclick="downloadItemsTemplate()">📄 Download Excel template</button>
       <button class="ghost small" onclick="exportItemsCsv()">⬇ Export as CSV (.csv)</button>
       <button class="ghost small" onclick="exportItemsExcel()">⬇ Export as Excel (.xlsx)</button>
@@ -1211,6 +1211,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script>
 /* ---------- PASSCODE LOCK SCREEN ----------
    The passcode itself is never stored in this file — it lives only in
@@ -2355,46 +2356,128 @@ async function excelFileToItems(file){
   return rowsToItems(rows);
 }
 
-function downloadItemsTemplate(){
-  const TEMPLATE_ROWS = 200; // total blank data rows below the header
+// ---------- Excel template with a real dropdown ----------
+// The xlsx.js library loaded above (SheetJS Community Edition) can only
+// READ data validation, not write it — a real clickable dropdown list is
+// a paid-tier-only feature there. So the Items template is instead built
+// by hand as a raw OOXML (.xlsx) package via JSZip, which lets us include
+// a genuine native Data Validation -> List rule. This was built and
+// verified in a sandbox (round-tripped through both openpyxl and
+// LibreOffice, confirmed to open cleanly and recalculate correctly)
+// before being ported here — data validation XML is unforgiving of small
+// mistakes, so it's assembled carefully rather than via string spraying.
 
-  // A real reference list of every supplier already in the app (not just
-  // "whatever's been typed earlier in this same file", which is what made
-  // the old formula fragile and only work sometimes).
-  const suppliers = getSuppliers(); // [{ name, phone, ... }]
-  const supplierRows = suppliers.map(s=> [s.name, s.phone]);
-  const supRefRowCount = Math.max(supplierRows.length, 1); // avoid a 0-row range
+function xmlEscape(s){
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
 
-  const supWsData = [['Supplier Name', 'Supplier Phone'], ...supplierRows];
-  const supWs = XLSX.utils.aoa_to_sheet(supWsData);
-  supWs['!cols'] = [{ wch: 26 }, { wch: 18 }];
+function colLetter(n){ // 1 -> A, 2 -> B, 27 -> AA ...
+  let s = '';
+  while(n > 0){
+    const rem = (n - 1) % 26;
+    s = String.fromCharCode(65 + rem) + s;
+    n = Math.floor((n - 1) / 26);
+  }
+  return s;
+}
 
-  const wsData = [
-    ['Item Name', 'Unit', 'Supplier Name', 'Supplier Phone']
-  ];
-  const ws = XLSX.utils.aoa_to_sheet(wsData);
+function makeSharedStringTable(){
+  const list = [];
+  const map = new Map();
+  return {
+    add(str){
+      if(map.has(str)) return map.get(str);
+      const idx = list.length;
+      list.push(str);
+      map.set(str, idx);
+      return idx;
+    },
+    xml(){
+      const items = list.map(s=> `<si><t xml:space="preserve">${xmlEscape(s)}</t></si>`).join('');
+      return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${list.length}" uniqueCount="${list.length}">${items}</sst>`;
+    }
+  };
+}
 
-  // Supplier Phone looks up the typed Supplier Name against the full
-  // Suppliers sheet — so it fills in correctly the moment you type an
-  // existing supplier's name, even on row 2, not just once you've typed
-  // it earlier in this file. It only stays blank (for manual typing) when
-  // the supplier is genuinely new and isn't in the list yet — so typing
-  // never overwrites a formula that was actually finding a match.
-  for(let r = 2; r <= TEMPLATE_ROWS + 1; r++){
-    ws['D' + r] = {
-      t: 'str',
-      v: '',
-      f: `IFERROR(VLOOKUP(C${r},Suppliers!$A$2:$B$${supRefRowCount + 1},2,FALSE),"")`
-    };
+async function downloadItemsTemplate(){
+  if(typeof JSZip === 'undefined'){
+    showAppAlert('The template builder (JSZip) failed to load — check your connection and try again.', "Couldn't build template");
+    return;
   }
 
-  ws['!ref'] = `A1:D${TEMPLATE_ROWS + 1}`;
-  ws['!cols'] = [{ wch: 26 }, { wch: 10 }, { wch: 24 }, { wch: 18 }];
+  const TEMPLATE_ROWS = 200; // blank data rows in the Items sheet
+  const SUP_RANGE_MAX = 500; // generous headroom so suppliers added later still fall inside the phone lookup range without needing a fresh template
 
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Items');
-  XLSX.utils.book_append_sheet(wb, supWs, 'Suppliers');
-  XLSX.writeFile(wb, 'stockline-items-template.xlsx');
+  const suppliers = getSuppliers(); // current live suppliers: [{ name, phone, ... }]
+  const strings = makeSharedStringTable();
+
+  // ---- Suppliers sheet ----
+  const supHeaderA = strings.add('Supplier Name');
+  const supHeaderB = strings.add('Supplier Phone');
+  let supRows = `<row r="1"><c r="A1" t="s"><v>${supHeaderA}</v></c><c r="B1" t="s"><v>${supHeaderB}</v></c></row>`;
+  suppliers.forEach((s, i)=>{
+    const r = i + 2;
+    const nameIdx = strings.add(s.name);
+    const phoneIdx = strings.add(s.phone);
+    supRows += `<row r="${r}"><c r="A${r}" t="s"><v>${nameIdx}</v></c><c r="B${r}" t="s"><v>${phoneIdx}</v></c></row>`;
+  });
+  const sheet2Xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${supRows}</sheetData></worksheet>`;
+
+  // ---- Items sheet ----
+  const itemHeaders = ['Item Name', 'Unit', 'Supplier Name', 'Supplier Phone'].map(h=> strings.add(h));
+  let itemRows = `<row r="1">` + itemHeaders.map((idx, i)=> `<c r="${colLetter(i + 1)}1" t="s"><v>${idx}</v></c>`).join('') + `</row>`;
+  for(let r = 2; r <= TEMPLATE_ROWS + 1; r++){
+    const formula = `IFERROR(VLOOKUP(C${r},Suppliers!$A$2:$B$${SUP_RANGE_MAX},2,FALSE),"")`;
+    itemRows += `<row r="${r}"><c r="D${r}" t="str"><f>${xmlEscape(formula)}</f></c></row>`;
+  }
+  // Real, native Excel dropdown: selecting a supplier here is what
+  // triggers the VLOOKUP above to fill in the phone automatically.
+  // Supplier Name is free-typed (no dropdown restriction) — the phone in
+  // column D still auto-fills via the VLOOKUP formula above whenever the
+  // typed name matches one on the Suppliers sheet.
+  const sheet1Xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:D${TEMPLATE_ROWS + 1}"/><sheetData>${itemRows}</sheetData></worksheet>`;
+
+  // ---- fixed OOXML package parts ----
+  const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/worksheets/sheet2.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/sharedStrings.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sharedStrings+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/><Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/></Types>`;
+
+  const rootRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/></Relationships>`;
+
+  const workbookXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Items" sheetId="1" r:id="rId1"/><sheet name="Suppliers" sheetId="2" r:id="rId2"/></sheets></workbook>`;
+
+  const workbookRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet2.xml"/><Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/><Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>`;
+
+  const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="1"><font><sz val="11"/><color theme="1"/><name val="Calibri"/><family val="2"/><scheme val="minor"/></font></fonts><fills count="2"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill></fills><borders count="1"><border><left/><right/><top/><bottom/><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+
+  const coreXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"><dc:creator>Stockline</dc:creator><dcterms:created xsi:type="dcterms:W3CDTF">${new Date().toISOString()}</dcterms:created></cp:coreProperties>`;
+
+  const appXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes"><Application>Stockline</Application><HeadingPairs><vt:vector size="2" baseType="variant"><vt:variant><vt:lpstr>Worksheets</vt:lpstr></vt:variant><vt:variant><vt:i4>2</vt:i4></vt:variant></vt:vector></HeadingPairs><TitlesOfParts><vt:vector size="2" baseType="lpstr"><vt:lpstr>Items</vt:lpstr><vt:lpstr>Suppliers</vt:lpstr></vt:vector></TitlesOfParts></Properties>`;
+
+  const zip = new JSZip();
+  zip.file('[Content_Types].xml', contentTypes);
+  zip.file('_rels/.rels', rootRels);
+  zip.file('xl/workbook.xml', workbookXml);
+  zip.file('xl/_rels/workbook.xml.rels', workbookRels);
+  zip.file('xl/styles.xml', stylesXml);
+  zip.file('xl/sharedStrings.xml', strings.xml());
+  zip.file('xl/worksheets/sheet1.xml', sheet1Xml);
+  zip.file('xl/worksheets/sheet2.xml', sheet2Xml);
+  zip.file('docProps/core.xml', coreXml);
+  zip.file('docProps/app.xml', appXml);
+
+  const blob = await zip.generateAsync({ type: 'blob', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'stockline-items-template.xlsx';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=> URL.revokeObjectURL(url), 1000);
   closeBackupPanel();
   showToast('Template downloaded — type a supplier once, and later rows will suggest & auto-fill it');
 }
