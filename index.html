@@ -1980,7 +1980,14 @@ async function fetchAndApplyRemote({ cached } = {}){
   } catch(err){
     console.error('Failed to load from Supabase', err);
     isOnline = false;
-    if(!cached){
+    // Only wipe local state if this is the very first load of the session
+    // with nothing else to show (loaded is still false). Once the app has
+    // loaded successfully at least once, `loaded` stays true for the rest
+    // of the session — so a background refresh (realtime, resumeSync) that
+    // hits a transient error here must NOT clear real local data just
+    // because one fetch attempt failed. It should leave stocks/orderHistory
+    // untouched and let the next successful refresh (or retry) fix things.
+    if(!cached && !loaded){
       stocks = [];
       orderHistory = [];
       showToast('Could not load data — check your connection');
