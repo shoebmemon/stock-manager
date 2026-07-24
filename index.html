@@ -1019,6 +1019,14 @@
       border-top:none;
       border-bottom:1px solid #303B4B;
       padding:6px 8px;
+      /* On desktop the whole page scrolls (not just `main`, like on
+         mobile), so without this the tab row scrolls away with the
+         content instead of staying put under the header. `top` is set
+         in JS (positionNavBar) to the header's real measured height,
+         since sticky needs an exact pixel offset, not "right below
+         whatever's above it". */
+      position:sticky;
+      z-index:19;
     }
     nav.bottom-tabs button{
       flex-direction:row;
@@ -1037,44 +1045,45 @@
     main{ order:2; padding-bottom:24px; }
 
     .toast{ bottom:24px; }
+
+    .app.selecting .select-bar{ max-width:640px; } /* match .app's desktop width */
   }
 
-  /* Mobile/tablet only: while selecting items, take over the top app bar
-     entirely (WhatsApp-style) instead of showing the delete controls as a
-     row sandwiched in the middle of the content, which could sit awkwardly
-     right under the install banner. The header, install banner and update
-     banner are hidden outright, and the select-bar becomes a fixed bar in
-     their place; `positionSelectBar()` pads `main` by the bar's real
-     measured height so content doesn't start out hidden underneath it. */
-  @media (max-width: 767px){
-    .app.selecting header.top,
-    .app.selecting #installBanner,
-    .app.selecting #updateBanner{
-      display:none;
-    }
-    .app.selecting .select-bar{
-      position:fixed;
-      top:0;
-      left:0;
-      right:0;
-      max-width:520px;
-      margin:0 auto;
-      z-index:30;
-      background:var(--ink);
-      border-bottom:none;
-      box-shadow:0 4px 10px rgba(27,36,48,.08);
-    }
-    .app.selecting .select-bar .sb-count{ color:var(--paper); }
-    .app.selecting .select-bar .sb-cancel{ color:var(--paper); opacity:.75; }
-    .app.selecting .select-bar .sb-cancel:hover{ opacity:1; }
-    .app.selecting .select-bar .sb-selectall{
-      color:var(--paper);
-      border-color:rgba(246,244,236,.35);
-    }
-    .app.selecting .select-bar .sb-selectall:hover{
-      border-color:var(--paper);
-      color:var(--paper);
-    }
+  /* Selection mode (delete rows): take over the top app bar entirely
+     (WhatsApp-style) instead of showing the delete controls as a row
+     sandwiched in the middle of the content. The header, install banner
+     and update banner are hidden outright, and the select-bar becomes a
+     fixed bar in their place; `positionSelectBar()` pads `main` by the
+     bar's real measured height so content doesn't start out hidden
+     underneath it. Applies on every screen size — this used to be
+     mobile-only, which is why it looked different on the PC version. */
+  .app.selecting header.top,
+  .app.selecting #installBanner,
+  .app.selecting #updateBanner{
+    display:none;
+  }
+  .app.selecting .select-bar{
+    position:fixed;
+    top:0;
+    left:0;
+    right:0;
+    max-width:520px;
+    margin:0 auto;
+    z-index:30;
+    background:var(--ink);
+    border-bottom:none;
+    box-shadow:0 4px 10px rgba(27,36,48,.08);
+  }
+  .app.selecting .select-bar .sb-count{ color:var(--paper); }
+  .app.selecting .select-bar .sb-cancel{ color:var(--paper); opacity:.75; }
+  .app.selecting .select-bar .sb-cancel:hover{ opacity:1; }
+  .app.selecting .select-bar .sb-selectall{
+    color:var(--paper);
+    border-color:rgba(246,244,236,.35);
+  }
+  .app.selecting .select-bar .sb-selectall:hover{
+    border-color:var(--paper);
+    color:var(--paper);
   }
 
 </style>
@@ -1180,7 +1189,7 @@
 
     <div class="card">
       <label>Items &amp; suppliers</label>
-      <p class="data-note">Export your item list as a CSV or Excel file — each row carries its supplier's name and phone. In the Excel template, once you've typed a supplier's name once, Excel will suggest it again on later rows and auto-fill the phone number when you pick it. Importing never deletes anything: rows already in your list (same name, unit &amp; supplier) are skipped, everything else is appended.</p>
+      <p class="data-note">Export your item list as a CSV or Excel file — each row carries its supplier's name and phone. The Excel template includes a "Suppliers" sheet listing every supplier already in your account — type an existing supplier's name in the Items sheet and the phone number fills in automatically, even on the very first row. (Want a real dropdown for Supplier Name instead of typing? Select the Supplier Name column → Data tab → Data Validation → List → source <code>=Suppliers!$A$2:$A$200</code> — a one-time, 10-second setup in Excel.) The phone cell only stays blank for suppliers that are genuinely new, so typing into it never overwrites a working lookup. Importing never deletes anything: rows already in your list (same name, unit &amp; supplier) are skipped, everything else is appended.</p>
       <button class="ghost small" onclick="downloadItemsTemplate()">📄 Download Excel template</button>
       <button class="ghost small" onclick="exportItemsCsv()">⬇ Export as CSV (.csv)</button>
       <button class="ghost small" onclick="exportItemsExcel()">⬇ Export as Excel (.xlsx)</button>
@@ -1731,9 +1740,42 @@ let isOnline = navigator.onLine;
 let pendingSync = false;
 let syncing = false;
 
+// Ids explicitly deleted locally but not yet confirmed deleted on the
+// server. Deliberately NOT inferred by diffing "remote rows minus whatever
+// happens to be in local memory right now" — that approach deleted rows
+// on the server that another device had added moments earlier but this
+// device's in-memory copy simply hadn't caught up to yet (a real bug: two
+// devices editing around the same time could wipe out each other's
+// additions, or resurrect something just deleted, or silently revert a
+// status change). Tracking exactly which ids the user deleted, and only
+// ever deleting those specific ids, makes deletion safe regardless of how
+// stale this device's local snapshot is relative to everyone else's.
+let pendingDeletedStockIds = [];
+let pendingDeletedOrderIds = [];
+
+// Wraps a promise so it can never hang indefinitely. This matters because
+// tapping "Send" opens WhatsApp via window.open() right before the save —
+// on mobile that backgrounds/suspends this tab immediately, and mobile
+// browsers (iOS Safari especially) can pause an in-flight network request
+// along with it. Without a timeout, that leaves `syncing` stuck true
+// forever: the completed status only ever existed on this device's screen,
+// the write never actually reached Supabase, and nothing could retry —
+// so a later reload (here or on any other device) would show the order
+// still "active", which is exactly the intermittent behavior reported.
+function withTimeout(promise, ms, label){
+  return new Promise((resolve, reject)=>{
+    const timer = setTimeout(()=> reject(new Error(`${label} timed out after ${ms/1000}s`)), ms);
+    promise.then(
+      v=>{ clearTimeout(timer); resolve(v); },
+      e=>{ clearTimeout(timer); reject(e); }
+    );
+  });
+}
+const SYNC_TIMEOUT_MS = 20000;
+
 function cacheLocally(){
   try{
-    localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify({ stocks, orderHistory, pendingSync, cachedAt: Date.now() }));
+    localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify({ stocks, orderHistory, pendingSync, pendingDeletedStockIds, pendingDeletedOrderIds, cachedAt: Date.now() }));
   }catch(e){
     console.error('Failed to write local cache', e);
   }
@@ -1840,6 +1882,8 @@ async function loadData(){
     stocks = cached.stocks || [];
     orderHistory = cached.orderHistory || [];
     pendingSync = !!cached.pendingSync;
+    pendingDeletedStockIds = cached.pendingDeletedStockIds || [];
+    pendingDeletedOrderIds = cached.pendingDeletedOrderIds || [];
     reconcileCreatedAt();
     loaded = true;
     render();
@@ -1980,7 +2024,16 @@ function setupRealtime(){
 async function resumeSync(){
   if(!navigator.onLine || !loaded) return;
   setupRealtime(); // no-op if already connected
-  if(syncing || pendingSync) return; // don't stomp an in-flight local save
+  if(syncing) return; // a save is already in flight — let it finish (or time out) on its own
+  if(pendingSync){
+    // A save may have gotten stuck earlier (e.g. suspended mid-request
+    // when WhatsApp opened and backgrounded the tab) and never got to
+    // retry, because the network technically never went offline — only
+    // the 'online' event triggers a retry otherwise, and that never fired.
+    // Coming back to the foreground is exactly the right moment to try again.
+    await flushPendingSync();
+    return;
+  }
   const ok = await fetchAndApplyRemote();
   if(ok){ render(); updateSyncIndicator(); }
 }
@@ -1988,10 +2041,6 @@ async function resumeSync(){
 // Pushes the full current in-memory state to Supabase. Used both by the
 // normal save functions and by the retry logic once connectivity returns.
 async function syncStocksToRemote(){
-  const remote = await fetchAllRows('stocks', 'id');
-  const remoteIds = new Set(remote.map(r=> r.id));
-  const localIds = new Set(stocks.map(s=> s.id));
-
   await ensureSupplierIds(stocks.map(s=> ({ name: s.supplierName, phone: s.supplierPhone })));
 
   const rows = stocks.map(s=>{
@@ -2004,20 +2053,16 @@ async function syncStocksToRemote(){
     if(upErr) throw upErr;
   }
 
-  const toDelete = [...remoteIds].filter(id=> !localIds.has(id));
-  if(toDelete.length > 0){
-    for(const chunk of chunkArray(toDelete, 500)){
+  if(pendingDeletedStockIds.length > 0){
+    for(const chunk of chunkArray(pendingDeletedStockIds, 500)){
       const { error: delErr } = await sb.from('stocks').delete().in('id', chunk);
       if(delErr) throw delErr;
     }
+    pendingDeletedStockIds = [];
   }
 }
 
 async function syncOrdersToRemote(){
-  const remote = await fetchAllRows('orders', 'id');
-  const remoteIds = new Set(remote.map(r=> r.id));
-  const localIds = new Set(orderHistory.map(o=> o.id));
-
   await ensureSupplierIds(orderHistory.map(o=> ({ name: o.supplierName, phone: o.supplierPhone })));
 
   const rows = orderHistory.map(o=>{
@@ -2030,12 +2075,12 @@ async function syncOrdersToRemote(){
     if(upErr) throw upErr;
   }
 
-  const toDelete = [...remoteIds].filter(id=> !localIds.has(id));
-  if(toDelete.length > 0){
-    for(const chunk of chunkArray(toDelete, 500)){
+  if(pendingDeletedOrderIds.length > 0){
+    for(const chunk of chunkArray(pendingDeletedOrderIds, 500)){
       const { error: delErr } = await sb.from('orders').delete().in('id', chunk);
       if(delErr) throw delErr;
     }
+    pendingDeletedOrderIds = [];
   }
 }
 
@@ -2054,9 +2099,10 @@ async function saveStocks(){
   try{
     syncing = true;
     updateSyncIndicator();
-    await syncStocksToRemote();
+    await withTimeout(syncStocksToRemote(), SYNC_TIMEOUT_MS, 'stocks sync');
     isOnline = true;
     syncing = false;
+    cacheLocally(); // persist the now-cleared pendingDeletedStockIds
     updateSyncIndicator();
   } catch(err){
     console.error('Failed to save stocks to Supabase — will retry when online', err);
@@ -2081,9 +2127,10 @@ async function saveOrderHistory(){
   try{
     syncing = true;
     updateSyncIndicator();
-    await syncOrdersToRemote();
+    await withTimeout(syncOrdersToRemote(), SYNC_TIMEOUT_MS, 'orders sync');
     isOnline = true;
     syncing = false;
+    cacheLocally(); // persist the now-cleared pendingDeletedOrderIds
     updateSyncIndicator();
   } catch(err){
     console.error('Failed to save orders to Supabase — will retry when online', err);
@@ -2102,8 +2149,8 @@ async function flushPendingSync(){
   try{
     syncing = true;
     updateSyncIndicator();
-    await syncStocksToRemote();
-    await syncOrdersToRemote();
+    await withTimeout(syncStocksToRemote(), SYNC_TIMEOUT_MS, 'stocks sync');
+    await withTimeout(syncOrdersToRemote(), SYNC_TIMEOUT_MS, 'orders sync');
     pendingSync = false;
     cacheLocally();
     isOnline = true;
@@ -2311,21 +2358,33 @@ async function excelFileToItems(file){
 function downloadItemsTemplate(){
   const TEMPLATE_ROWS = 200; // total blank data rows below the header
 
+  // A real reference list of every supplier already in the app (not just
+  // "whatever's been typed earlier in this same file", which is what made
+  // the old formula fragile and only work sometimes).
+  const suppliers = getSuppliers(); // [{ name, phone, ... }]
+  const supplierRows = suppliers.map(s=> [s.name, s.phone]);
+  const supRefRowCount = Math.max(supplierRows.length, 1); // avoid a 0-row range
+
+  const supWsData = [['Supplier Name', 'Supplier Phone'], ...supplierRows];
+  const supWs = XLSX.utils.aoa_to_sheet(supWsData);
+  supWs['!cols'] = [{ wch: 26 }, { wch: 18 }];
+
   const wsData = [
     ['Item Name', 'Unit', 'Supplier Name', 'Supplier Phone']
   ];
   const ws = XLSX.utils.aoa_to_sheet(wsData);
 
-  // From row 3 onward, Supplier Phone auto-fills from any earlier row in this
-  // sheet that already used the same Supplier Name — so once a supplier has
-  // been typed once, Excel's own autocomplete suggests the name again on
-  // later rows, and picking it fills the phone number automatically. If the
-  // supplier name is new, the cell just stays blank for manual entry.
-  for(let r = 3; r <= TEMPLATE_ROWS + 1; r++){
+  // Supplier Phone looks up the typed Supplier Name against the full
+  // Suppliers sheet — so it fills in correctly the moment you type an
+  // existing supplier's name, even on row 2, not just once you've typed
+  // it earlier in this file. It only stays blank (for manual typing) when
+  // the supplier is genuinely new and isn't in the list yet — so typing
+  // never overwrites a formula that was actually finding a match.
+  for(let r = 2; r <= TEMPLATE_ROWS + 1; r++){
     ws['D' + r] = {
       t: 'str',
       v: '',
-      f: `IFERROR(INDEX($D$2:D${r - 1},MATCH(C${r},$C$2:C${r - 1},0)),"")`
+      f: `IFERROR(VLOOKUP(C${r},Suppliers!$A$2:$B$${supRefRowCount + 1},2,FALSE),"")`
     };
   }
 
@@ -2334,6 +2393,7 @@ function downloadItemsTemplate(){
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Items');
+  XLSX.utils.book_append_sheet(wb, supWs, 'Suppliers');
   XLSX.writeFile(wb, 'stockline-items-template.xlsx');
   closeBackupPanel();
   showToast('Template downloaded — type a supplier once, and later rows will suggest & auto-fill it');
@@ -3169,16 +3229,31 @@ function renderOrdersListItems(status){
   wrap.innerHTML = html;
 }
 
+// On desktop the nav bar (Order/Active/Completed/Items/Suppliers) becomes
+// a sticky top bar instead of a fixed bottom bar. `position:sticky` needs
+// an exact pixel offset to stick right below the header rather than
+// overlapping it — so this measures the header's real rendered height
+// (it isn't a fixed constant; it can wrap or change with content) and
+// applies it as the nav's sticky `top`. On mobile the nav stays bottom-
+// fixed via normal flex layout and doesn't need this, so it's cleared.
+function positionNavBar(){
+  const header = document.querySelector('header.top');
+  const nav = document.querySelector('nav.bottom-tabs');
+  if(!header || !nav) return;
+  const isDesktop = window.matchMedia('(min-width: 768px)').matches;
+  nav.style.top = isDesktop ? header.offsetHeight + 'px' : '';
+}
+
 function positionSelectBar(){
   const bar = document.querySelector('.select-bar');
   if(bar) bar.style.top = '';
-  // On mobile the select-bar becomes position:fixed, taking itself out of
-  // normal flow — so `main`'s content would otherwise start out hidden
-  // underneath it. Pad main by the bar's real measured height (rather than
-  // a guessed constant) so content always starts right below it, however
-  // tall the bar actually renders (e.g. with the count text wrapping).
-  const isMobile = window.matchMedia('(max-width: 767px)').matches;
-  if(bar && isMobile){
+  // The select-bar is position:fixed while selecting (on every screen
+  // size), taking itself out of normal flow — so `main`'s content would
+  // otherwise start out hidden underneath it. Pad main by the bar's real
+  // measured height (rather than a guessed constant) so content always
+  // starts right below it, however tall the bar actually renders (e.g.
+  // with the count text wrapping).
+  if(bar){
     mainEl.style.paddingTop = (bar.offsetHeight + 18) + 'px';
   } else {
     mainEl.style.paddingTop = '';
@@ -3252,6 +3327,7 @@ function deleteSelectedOrders(){
     confirmLabel: 'Delete',
     danger: true,
     onConfirm: ()=>{
+      pendingDeletedOrderIds.push(...selectedOrderIds);
       orderHistory = orderHistory.filter(o=> !selectedOrderIds.has(o.id));
       selectionMode = false;
       selectionTab = null;
@@ -3287,6 +3363,7 @@ function sendToWhatsApp(orderId){
 }
 
 function deleteOrder(orderId){
+  pendingDeletedOrderIds.push(orderId);
   orderHistory = orderHistory.filter(o=> o.id !== orderId);
   saveOrderHistory();
   render();
@@ -3411,6 +3488,20 @@ function removeOrderItem(index){
   const o = orderHistory.find(x=> x.id === viewingOrderId);
   if(!o) return;
   o.items.splice(index, 1);
+
+  if(o.items.length === 0){
+    // Nothing left in this order for this supplier — remove the order
+    // itself rather than leaving an empty card with just a supplier name
+    // sitting in the Active tab.
+    pendingDeletedOrderIds.push(o.id);
+    orderHistory = orderHistory.filter(x=> x.id !== o.id);
+    viewingOrderId = null;
+    saveOrderHistory();
+    render();
+    showToast('Order removed — no items left');
+    return;
+  }
+
   saveOrderHistory();
   renderOrderDetail();
   showToast('Item removed from order');
@@ -3644,6 +3735,7 @@ function deleteSelectedStocks(){
     confirmLabel: 'Delete',
     danger: true,
     onConfirm: ()=>{
+      pendingDeletedStockIds.push(...selectedStockIds);
       stocks = stocks.filter(s=> !selectedStockIds.has(s.id));
       stockSelectionMode = false;
       selectedStockIds = new Set();
@@ -3734,8 +3826,8 @@ function removeStock(id){
     return;
   }
 
+  pendingDeletedStockIds.push(id);
   stocks = stocks.filter(s=> s.id !== id);
-  if(editingStockId === id) editingStockId = null;
   saveStocks();
   render();
 }
@@ -4246,7 +4338,9 @@ function escapeHtml(str){
 
 TABS.forEach(t=> document.getElementById('tab' + capitalize(t) + 'Btn').classList.toggle('active', t === currentTab));
 window.addEventListener('resize', positionSelectBar);
+window.addEventListener('resize', positionNavBar);
 loadData();
+positionNavBar();
 
 /* ---------- KEYBOARD-AWARE SCROLLING ----------
    On mobile, the on-screen keyboard covers the lower part of the screen
