@@ -1980,14 +1980,7 @@ async function fetchAndApplyRemote({ cached } = {}){
   } catch(err){
     console.error('Failed to load from Supabase', err);
     isOnline = false;
-    // Only wipe local state if this is the very first load of the session
-    // with nothing else to show (loaded is still false). Once the app has
-    // loaded successfully at least once, `loaded` stays true for the rest
-    // of the session — so a background refresh (realtime, resumeSync) that
-    // hits a transient error here must NOT clear real local data just
-    // because one fetch attempt failed. It should leave stocks/orderHistory
-    // untouched and let the next successful refresh (or retry) fix things.
-    if(!cached && !loaded){
+    if(!cached){
       stocks = [];
       orderHistory = [];
       showToast('Could not load data — check your connection');
@@ -2114,6 +2107,71 @@ async function syncOrdersToRemote(){
   }
 }
 
+// ---------- SYNC QUEUEING ----------
+// saveStocks()/saveOrderHistory() can each be called again before their
+// previous network round-trip has finished (e.g. delete one item, then
+// immediately add another). Without serializing that, two upserts/deletes
+// for the SAME table could be in flight at once — and whichever response
+// happened to arrive last would win on the server, even if it was the one
+// that started first and was carrying older data. That's how a delete
+// could "come back": a stale save finishing after a newer delete silently
+// re-inserted the row. runXAgain flags below make sure only one request per
+// table is ever in flight; a save requested mid-flight just asks the
+// current run to loop once more, and that rerun always reads the live
+// in-memory stocks/orderHistory, so it can never push stale data.
+let stocksSyncChain = null;
+let stocksRunAgain = false;
+let ordersSyncChain = null;
+let ordersRunAgain = false;
+
+// A stocks save and an orders save can now legitimately run at the same
+// time (they're different tables/chains). Track how many are in flight
+// with a counter rather than a boolean, so one finishing early doesn't
+// clear the "syncing" indicator while the other is still running.
+let activeSyncCount = 0;
+function beginSyncIndicator(){ activeSyncCount++; syncing = true; updateSyncIndicator(); }
+function endSyncIndicator(){ activeSyncCount = Math.max(0, activeSyncCount - 1); syncing = activeSyncCount > 0; updateSyncIndicator(); }
+
+async function runStocksSync(){
+  let ok = true;
+  do{
+    stocksRunAgain = false;
+    try{
+      await withTimeout(syncStocksToRemote(), SYNC_TIMEOUT_MS, 'stocks sync');
+      isOnline = true;
+      cacheLocally(); // persist the now-cleared pendingDeletedStockIds
+    } catch(err){
+      console.error('Failed to save stocks to Supabase — will retry when online', err);
+      pendingSync = true;
+      cacheLocally();
+      ok = false;
+      break; // don't spin-retry here; 'online'/resumeSync will retry later
+    }
+  } while(stocksRunAgain);
+  stocksSyncChain = null;
+  return ok;
+}
+
+async function runOrdersSync(){
+  let ok = true;
+  do{
+    ordersRunAgain = false;
+    try{
+      await withTimeout(syncOrdersToRemote(), SYNC_TIMEOUT_MS, 'orders sync');
+      isOnline = true;
+      cacheLocally(); // persist the now-cleared pendingDeletedOrderIds
+    } catch(err){
+      console.error('Failed to save orders to Supabase — will retry when online', err);
+      pendingSync = true;
+      cacheLocally();
+      ok = false;
+      break;
+    }
+  } while(ordersRunAgain);
+  ordersSyncChain = null;
+  return ok;
+}
+
 async function saveStocks(){
   localDataVersion++;
   // Always save the snapshot first — this always succeeds, online or offline.
@@ -2127,21 +2185,12 @@ async function saveStocks(){
     return;
   }
 
-  try{
-    syncing = true;
-    updateSyncIndicator();
-    await withTimeout(syncStocksToRemote(), SYNC_TIMEOUT_MS, 'stocks sync');
-    isOnline = true;
-    syncing = false;
-    cacheLocally(); // persist the now-cleared pendingDeletedStockIds
-    updateSyncIndicator();
-  } catch(err){
-    console.error('Failed to save stocks to Supabase — will retry when online', err);
-    syncing = false;
-    pendingSync = true;
-    cacheLocally();
-    updateSyncIndicator();
-  }
+  stocksRunAgain = true;
+  beginSyncIndicator();
+  if(!stocksSyncChain) stocksSyncChain = runStocksSync();
+  const ok = await stocksSyncChain;
+  if(ok) pendingSync = false;
+  endSyncIndicator();
 }
 
 async function saveOrderHistory(){
@@ -2156,45 +2205,40 @@ async function saveOrderHistory(){
     return;
   }
 
-  try{
-    syncing = true;
-    updateSyncIndicator();
-    await withTimeout(syncOrdersToRemote(), SYNC_TIMEOUT_MS, 'orders sync');
-    isOnline = true;
-    syncing = false;
-    cacheLocally(); // persist the now-cleared pendingDeletedOrderIds
-    updateSyncIndicator();
-  } catch(err){
-    console.error('Failed to save orders to Supabase — will retry when online', err);
-    syncing = false;
-    pendingSync = true;
-    cacheLocally();
-    updateSyncIndicator();
-  }
+  ordersRunAgain = true;
+  beginSyncIndicator();
+  if(!ordersSyncChain) ordersSyncChain = runOrdersSync();
+  const ok = await ordersSyncChain;
+  if(ok) pendingSync = false;
+  endSyncIndicator();
 }
 
 // Re-pushes everything once connectivity is confirmed, so changes made
 // while offline reach Supabase without further action. Only runs when the
 // browser fires the 'online' event or on the next save — no timer/polling.
+// Routed through the same per-table chains as saveStocks/saveOrderHistory
+// so this can never race against (or be raced by) an in-flight save.
 async function flushPendingSync(){
-  if(syncing || !navigator.onLine) return;
-  try{
-    syncing = true;
-    updateSyncIndicator();
-    await withTimeout(syncStocksToRemote(), SYNC_TIMEOUT_MS, 'stocks sync');
-    await withTimeout(syncOrdersToRemote(), SYNC_TIMEOUT_MS, 'orders sync');
+  if(!navigator.onLine) return;
+  beginSyncIndicator();
+
+  stocksRunAgain = true;
+  if(!stocksSyncChain) stocksSyncChain = runStocksSync();
+  ordersRunAgain = true;
+  if(!ordersSyncChain) ordersSyncChain = runOrdersSync();
+
+  const [stocksOk, ordersOk] = await Promise.all([stocksSyncChain, ordersSyncChain]);
+
+  if(stocksOk && ordersOk){
     pendingSync = false;
     cacheLocally();
     isOnline = true;
     showToast('Back online — changes synced');
-  } catch(err){
-    console.error('Retry sync failed, will try again later', err);
+  } else {
     pendingSync = true;
     cacheLocally();
-  } finally{
-    syncing = false;
-    updateSyncIndicator();
   }
+  endSyncIndicator();
 }
 
 window.addEventListener('online', ()=>{
