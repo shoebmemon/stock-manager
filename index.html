@@ -1774,6 +1774,16 @@ function withTimeout(promise, ms, label){
 }
 const SYNC_TIMEOUT_MS = 20000;
 
+// Bumped synchronously at the start of every local write (saveStocks/
+// saveOrderHistory), before any network request goes out. A background
+// refetch (from the realtime subscription, resumeSync, etc.) captures this
+// counter when it starts; if it changes before the refetch finishes, a
+// newer local edit happened in the meantime and the fetch's results are
+// stale and must NOT overwrite in-memory state — otherwise an edit made
+// while a refetch is in flight gets silently discarded (item "added, then
+// vanishes on the next screen").
+let localDataVersion = 0;
+
 function cacheLocally(){
   try{
     localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify({ stocks, orderHistory, pendingSync, pendingDeletedStockIds, pendingDeletedOrderIds, cachedAt: Date.now() }));
@@ -1921,12 +1931,24 @@ async function loadData(){
 // made on another device — including deletes — is reflected here without
 // needing a manual refresh. Returns true on success, false on failure.
 async function fetchAndApplyRemote({ cached } = {}){
+  const versionAtFetchStart = localDataVersion;
   try{
     const [suppliersData, stocksData, ordersData] = await Promise.all([
       fetchAllRows('suppliers', '*'),
       fetchAllRows('stocks', '*'),
       fetchAllRows('orders', '*')
     ]);
+
+    // A local edit (add/remove/qty change, etc.) started while this fetch
+    // was in flight. That edit's own save is now responsible for reaching
+    // Supabase and is the source of truth going forward — applying this
+    // now-stale snapshot on top of it would silently erase the edit (e.g.
+    // an item added right after another add would vanish on the next
+    // screen). Bail out without touching in-memory state; the edit's own
+    // save (or the next realtime event once it completes) will resync.
+    if(localDataVersion !== versionAtFetchStart){
+      return true;
+    }
 
     const supplierById = new Map(suppliersData.map(s=> [s.id, s]));
     supplierCache = new Map(suppliersData.map(s=> [s.name.trim().toLowerCase(), s]));
@@ -2086,6 +2108,7 @@ async function syncOrdersToRemote(){
 }
 
 async function saveStocks(){
+  localDataVersion++;
   // Always save the snapshot first — this always succeeds, online or offline.
   cacheLocally();
 
@@ -2115,6 +2138,7 @@ async function saveStocks(){
 }
 
 async function saveOrderHistory(){
+  localDataVersion++;
   cacheLocally();
 
   if(!navigator.onLine){
